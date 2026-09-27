@@ -1,6 +1,6 @@
 # 상업 허용 모델로 전부 교체하기 — 할 일
 
-> 2026-09-27 기록. 게임(사가 다섯 판·saga-unity·saga-godot, `C:\swbins`)에 넣어 **팔 수 있는 에셋**을 이 도구로 만들려면,
+> 2026-09-27 기록, 2026-09-28 교체 반영. 게임(사가 다섯 판·saga-unity·saga-godot, `C:\swbins`)에 넣어 **팔 수 있는 에셋**을 이 도구로 만들려면,
 > 지금 모델 가운데 비상업 전용인 것을 상업 허용 모델로 바꿔야 한다. 이 문서는 swbins3 세션에서 따로 이어 가기 위한 할 일 목록이다.
 > 모델 받는 법·넣을 위치는 `AI_MODELS_TODO.md`, 설치는 `SETUP_GUIDE.md`·`SETUP_GUIDE_RADEON.md`.
 
@@ -10,51 +10,52 @@
 - 만든 결과물마다 **어떤 모델로 만들었는지 기록**을 남긴다(나중에 출처를 물으면 답할 수 있게 — `C:\swbins\tools\char-forge` 가 몸마다 `.license.json` 을 남기는 방식).
 - AI 로만 만든 결과물은 저작권 보호가 약하다(사람의 창작 기여가 없으면 보호받기 어렵다는 게 지금 흐름). 팔 수는 있지만 "남이 못 베끼게"는 안 된다 — 게임에 쓸 때는 사람이 고르고·고치고·조합하는 단계를 둔다.
 
-## 지금 모델 — 상업 사용 판정
+## 모델별 상업 사용 판정 (2026-09-28 라이선스 원문·배포처 확인)
 
-| 기능 | 지금 모델 | 라이선스 | 상업 | 할 일 |
+| 기능 | 모델 | 라이선스 (확인한 곳) | 상업 | 비고 |
 |---|---|---|---|---|
-| 음악 | `facebook/musicgen-small` | CC-BY-NC 4.0 (가중치) | ❌ 비상업 | **교체** |
-| 음성 | `coqui/XTTS-v2` | Coqui Public Model License | ❌ 비상업 | **교체** |
-| 이미지(기본) | SD 1.5 `v1-5-pruned-emaonly` | CreativeML OpenRAIL-M | ✅ (금지 용도만 제한) | 유지 — 라이선스 원문 확인해 이 문서에 날짜와 함께 적기 |
-| 이미지(애니) | Counterfeit-V3.0 · ReV Animated 1.2.2 | 모델 페이지마다 다름 | ⚠️ **미확인** | 모델 카드·배포처(HF·civitai)의 상업 조건 확인 → 안 되면 교체 |
-| 동영상 | AnimateDiff `mm_sd15_v2` | ⚠️ **미확인** | ⚠️ | 원 저장소(guoyww/AnimateDiff)·배포본(conrevo) 라이선스 확인 |
-| 3D | OpenAI Shap-E | MIT | ✅ | 권리는 문제없음. 품질이 낮아(뭉툭한 덩어리·뼈대 없음) 게임 인물로는 못 씀 — 소품 초안 정도 |
+| 음악 | **ACE-Step 1.5** (`acestep-v15-turbo` + LM 0.6B) | MIT — 코드·가중치 모두 ([GitHub](https://github.com/ace-step/ACE-Step-1.5) README "licensed under MIT", [HF](https://huggingface.co/ACE-Step/Ace-Step1.5) 태그 `license:mit`, 게이트 없음) | ✅ | **교체함**. 저작자는 "기존 곡과 비슷하게 나올 수 있으니 독창성을 확인하고 AI 사용을 밝히라"고 권고 |
+| 음성 | **Supertonic 3** | 가중치 OpenRAIL-M, 코드 MIT ([HF LICENSE](https://huggingface.co/Supertone/supertonic-3/blob/main/LICENSE), 게이트 없음) | ✅ (금지 용도만 제한) | **교체함**. 정해진 목소리 10종, 목소리 흉내 없음. 2026-07 개발 종료·보관 처리됨(가중치는 그대로 쓸 수 있음) |
+| 이미지(기본) | SD 1.5 `v1-5-pruned-emaonly` | CreativeML OpenRAIL-M ([HF](https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5) 태그) | ✅ (금지 용도만 제한) | 유지 |
+| 이미지(애니) | Counterfeit-V3.0 | CreativeML OpenRAIL-M ([HF](https://huggingface.co/gsdf/Counterfeit-V3.0) 태그). civitai(모델 4468) 상업 표시: `Image`(생성 이미지 판매 허용)·`RentCivit` | ✅ 생성 이미지 판매 가능 | 유지. 모델 파일 자체를 팔거나 재배포하는 건 안 됨 |
+| 이미지(애니) | ReV Animated 1.2.2 | CreativeML OpenRAIL-M ([HF](https://huggingface.co/s6yx/ReV_Animated) 태그). civitai(모델 7371) 상업 표시: `Image`·`RentCivit`, **크레딧 표기 필요**(`allowNoCredit: false`) | ✅ 생성 이미지 판매 가능 | 유지. 게임 크레딧에 "ReV Animated (s6yx)" 를 적는다 |
+| 동영상 | AnimateDiff `mm_sd15_v2` | Apache 2.0 ([guoyww/AnimateDiff](https://github.com/guoyww/AnimateDiff), [HF guoyww/animatediff](https://huggingface.co/guoyww/animatediff) 태그) | ✅ | 유지. 받는 곳 `conrevo/AnimateDiff-A1111` 은 원본을 fp16·safetensors 로 바꾼 것(라이선스 표시 없음 — 원본 Apache 2.0 을 따름). 걱정되면 원본 `mm_sd15_v2.ckpt` 를 받아도 된다 |
+| 3D | OpenAI Shap-E | MIT | ✅ | 품질이 낮아(뭉툭한 덩어리·뼈대 없음) 게임 인물로는 못 씀 — 소품 초안 정도 |
 | 문서 | Qwen2.5 7B | Apache 2.0 | ✅ | 유지 |
 | 코드 | Qwen2.5-Coder 7B | Apache 2.0 | ✅ | 유지 |
 
-⚠️ 위 판정은 2026-09-27 세션의 지식으로 적은 것이다. **교체·유지 결정 전에 각 모델 카드의 라이선스 원문을 다시 열어 확인**하고, 확인한 날짜와 링크를 이 표에 적는다.
+**쓰지 않음(비상업)**: `facebook/musicgen-small`(CC-BY-NC 4.0), `coqui/XTTS-v2`(Coqui Public Model License). 코드에서 뺐다.
 
-## 교체 후보 (넣기 전에 반드시 라이선스 원문 확인)
+## 검토했지만 고르지 않은 후보
 
-| 기능 | 후보 | 알려진 라이선스 | 메모 |
-|---|---|---|---|
-| 음악 | Stable Audio Open 1.0 | Stability AI Community License(연 매출 한도 안에서 상업 허용) | 한도·조건 확인. 짧은 효과음·루프에 강함 |
-| 음악 | ACE-Step | Apache 2.0 로 알려짐 | 확인 필요. 곡 길이·품질 시험 |
-| 음성 | MeloTTS | MIT | **한국어 지원**. 목소리 흉내(참조 음성) 기능은 없음 — 정해진 목소리 |
-| 음성 | Piper | 코드 MIT, **목소리마다 라이선스 다름** | 한국어 목소리 유무·목소리별 라이선스 확인 |
-| 이미지(애니) | SDXL 계열 상업 허용 체크포인트 | 모델마다 다름 | civitai 는 페이지의 "상업 사용" 표시를 확인. SDXL base 는 OpenRAIL++-M |
-| 3D | TRELLIS(Microsoft) | MIT 로 알려짐 | **NVIDIA CUDA·큰 VRAM 필요** — 이 PC(AMD)에선 어려움 |
-| 3D | Hunyuan3D | 라이선스가 **한국을 적용 지역에서 뺌** | 쓰지 않는다 |
+| 기능 | 후보 | 이유 |
+|---|---|---|
+| 음악 | Stable Audio Open 1.0 / Small | Stability AI Community License — 연 매출 한도가 있고 저장소가 게이트(동의 필요). ACE-Step(MIT) 이 더 깔끔함 |
+| 음성 | MeloTTS 한국어 | 모델은 MIT 지만 한국어 발음에 쓰는 BERT(`kykim/bert-kor-base`)의 README 가 "Apache-2.0" 과 "상업적 사용은 MOU(무료) 문의" 를 함께 적고 있어 애매함. 윈도우에서 mecab 설치도 번거로움 |
+| 음성 | Piper | 한국어 공식 목소리가 없음 |
+| 3D | TRELLIS(Microsoft) | NVIDIA CUDA·큰 VRAM 필요 — 이 PC(AMD)에선 어려움 |
+| 3D | Hunyuan3D | 라이선스가 **한국을 적용 지역에서 뺌** — 쓰지 않는다 |
 
 ## 이 PC 조건 (2026-09-27)
 
 - 그래픽카드 **AMD Radeon RX 7600 (8GB)**, RAM 32GB. 기존 설정 문서는 NVIDIA 6GB PC 기준으로 검증됨.
-- `SETUP_GUIDE_RADEON.md` 는 **미검증**(DirectML·AMD 포크 sd-webui 안내).
-- 이 PC 에는 `sd-webui/`·`ollama` 가 **아직 없다**(gitignore 대상이라 PC 마다 설치).
-- CUDA 전용 모델(TRELLIS 등)은 후보에서 뒤로 미룬다.
+- `SETUP_GUIDE_RADEON.md` 는 음악(ACE-Step ROCm)·음성(Supertonic) 절이 검증됨. 이미지(sd-webui) 절은 **미검증**.
+- 이 PC 에는 `sd-webui/`·`ollama` 가 **아직 없다**(gitignore 대상이라 PC 마다 설치). `music-gen/ACE-Step-1.5/` 는 설치됨.
 
 ## 순서
 
-1. 이 PC 에서 이미지(SD 1.5)부터 돌게 한다 — 라데온 안내서대로, 막힌 곳은 안내서에 고쳐 적는다.
-2. 표의 ⚠️ 항목(애니 체크포인트·AnimateDiff) 라이선스 원문 확인 → 표 갱신.
-3. 음악 교체: 후보 라이선스 확인 → `music-gen/server.py` 모델 교체 → 짧은 곡 생성 시험.
-4. 음성 교체: MeloTTS(한국어) 라이선스 확인 → `voice-gen/server.py` 교체 → 참조 음성 없이 동작하도록 UI(ai-tools-hub 음성 탭) 수정.
-5. 결과물 출처 기록: 생성 파일 옆에 `<파일>.license.json`(모델 이름·버전·라이선스·생성 날짜·프롬프트)을 남기게 각 서버에 추가.
-6. `AI_MODELS_TODO.md` 의 해당 절(받는 곳·넣을 위치·상태)을 새 모델로 바꾸고, 옛 비상업 모델은 "쓰지 않음"으로 표시.
+1. ⬜ 이 PC 에서 이미지(SD 1.5)부터 돌게 한다 — 라데온 안내서대로, 막힌 곳은 안내서에 고쳐 적는다.
+2. ✅ 표의 ⚠️ 항목(애니 체크포인트·AnimateDiff) 라이선스 원문 확인 → 표 갱신 (2026-09-28).
+3. ✅ 음악 교체: ACE-Step 1.5 로 `music-gen/server.py` 를 바꾸고, 이 PC 에 ROCm 7.2 로 설치해 15·30·120초 곡 생성 확인 (2026-09-28).
+   시험 곡: `out\music-samples\` (gitignore 대상).
+4. ✅ 음성 교체: Supertonic 3 로 `voice-gen/server.py` 교체, 허브 음성 탭에서 참조 음성 올리기를 없애고 목소리 선택을 넣음. 이 PC 에서 한국어 생성 확인.
+5. 🔶 결과물 출처 기록: 음악·음성은 서버가 응답에 `provenance`(모델·커밋·라이선스·생성 시각·프롬프트)를 넣고, 허브가 결과 아래에
+   `⬇ 출처 기록(.license.json)` 링크를 띄운다. **남은 일**: 이미지·동영상(sd-webui)·3D 에도 같은 기록을 붙이기.
+6. ✅ `AI_MODELS_TODO.md` 의 음악·음성 절을 새 모델로 바꾸고, 옛 비상업 모델은 "쓰지 않음"으로 표시.
 
 ## 하지 말 것
 
-- 비상업 모델(MusicGen·XTTS-v2)로 만든 결과물을 게임 저장소(`C:\swbins`)에 넣지 않는다.
+- 비상업 모델(MusicGen·XTTS-v2)로 **예전에** 만든 결과물을 게임 저장소(`C:\swbins`)에 넣지 않는다.
 - 라이선스 원문을 확인하지 않은 모델을 "상업 OK"로 적지 않는다.
 - 원작 게임·실존 인물 이름·특정 작가 화풍을 프롬프트에 넣어 만든 결과물을 게임에 쓰지 않는다(사가 저장소의 이름·에셋 정책).
+- 음악 프롬프트에 실제 곡 제목·가수 이름을 넣지 않는다(ACE-Step 저작자 권고와 같음).

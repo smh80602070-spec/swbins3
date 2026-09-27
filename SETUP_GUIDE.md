@@ -64,50 +64,53 @@ webui-user.bat
 
 모델 파일은 `AI_MODELS_TODO.md`의 1·2번 참고.
 
-## 2. music-gen (음악)
+## 2. music-gen (음악 — ACE-Step 1.5, MIT 라이선스)
+
+`music-gen/server.py`는 ACE-Step 1.5의 REST API 서버를 감싸는 어댑터입니다(포트 7862는 그대로).
+첫 요청 때 ACE-Step API 서버(포트 8001)를 숨김 프로세스로 띄우고, 5분 동안 요청이 없으면 끕니다.
+어댑터 자체는 flask만 필요하고, ACE-Step은 `music-gen\ACE-Step-1.5\` 에 따로 설치합니다.
 
 ```powershell
-cd C:\swbins3
-mkdir music-gen
-cd music-gen
-python -m venv venv
-venv\Scripts\python.exe -m pip install --upgrade pip
-venv\Scripts\python.exe -m pip install torch --index-url https://download.pytorch.org/whl/cu121
-venv\Scripts\python.exe -m pip install transformers scipy flask accelerate
+cd C:\swbins3\music-gen
+py -3.12 -m venv venv
+venv\Scripts\python.exe -m pip install -r requirements.txt
+git clone https://github.com/ace-step/ACE-Step-1.5.git ACE-Step-1.5
+cd ACE-Step-1.5
 ```
 
-`server.py`, `run.bat`은 git에 이미 있습니다(clone하면 옴). 모델(`facebook/musicgen-small`)은 첫 요청 때 자동 다운로드됩니다.
-
-## 3. voice-gen (음성)
+**NVIDIA(CUDA) PC** — [uv](https://docs.astral.sh/uv/) 로 설치합니다(`.venv` 가 생기고, 어댑터가 자동으로 찾습니다).
 
 ```powershell
-cd C:\swbins3
-mkdir voice-gen
-cd voice-gen
-python -m venv venv
-venv\Scripts\python.exe -m pip install --upgrade pip
-venv\Scripts\python.exe -m pip install pip-system-certs
+uv sync
+uv run acestep-download                                                # 기본 모델(약 10GB: DiT turbo, VAE, 텍스트 인코더, LM 1.7B)
+uv run acestep-download --model acestep-5Hz-lm-0.6B --skip-main       # VRAM 8GB 이하용 작은 LM
 ```
 
-`pip-system-certs`는 회사 TLS 검사 프록시의 자체 서명 인증서를 Python이 못 믿어서 나는
-`SSL: CERTIFICATE_VERIFY_FAILED` 에러를 막아줍니다(Windows 인증서 저장소를 쓰도록 패치).
+**AMD Radeon PC** — `SETUP_GUIDE_RADEON.md` 의 "음악(ACE-Step 1.5)" 절을 따릅니다(`venv_rocm`).
+
+- 어댑터는 `venv_rocm` → `.venv` → `venv` 순서로 ACE-Step 의 python.exe 를 찾습니다. 다른 곳에 설치했으면
+  `ACESTEP_DIR`(설치 폴더) 또는 `ACESTEP_PYTHON`(python.exe 경로) 환경 변수로 알려 줍니다.
+- 기본값: DiT `acestep-v15-turbo` + LM `acestep-5Hz-lm-0.6B`, CPU 오프로드 켬(VRAM 8GB 권장 조합).
+  바꾸려면 `ACESTEP_CONFIG_PATH`·`ACESTEP_LM_MODEL_PATH` 환경 변수를 `run.bat` 에 넣습니다.
+- ACE-Step 로그는 `logscestep-api.log` 에 쌓입니다. 음악 생성이 실패하면 먼저 여기를 봅니다.
+- 웹 UI 는 가사 없는 연주곡(`[Instrumental]`)을 10~240초로 만듭니다.
+
+## 3. voice-gen (음성 — Supertonic 3, OpenRAIL-M)
+
+ONNX Runtime 으로 CPU 에서 도는 가벼운 모델이라 그래픽카드 종류와 상관없이 같은 방법으로 설치합니다.
 
 ```powershell
-venv\Scripts\python.exe -m pip install torch --index-url https://download.pytorch.org/whl/cu121
-venv\Scripts\python.exe -m pip install torchaudio --index-url https://download.pytorch.org/whl/cu121
-$env:SETUPTOOLS_USE_DISTUTILS = "stdlib"
-venv\Scripts\python.exe -m pip install coqui-tts flask
-venv\Scripts\python.exe -m pip install "transformers>=4.57,<5"
+cd C:\swbins3\voice-gen
+py -3.12 -m venv venv
+venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-⚠️ 주의사항:
-- 원본 `TTS` 패키지가 아니라 **`coqui-tts`**(커뮤니티 유지보수 포크)를 설치해야 합니다. 원본은 MSVC 빌드 도구가 없으면
-  `Unable to find vcvarsall.bat` 에러로 설치가 안 됩니다.
-- `transformers`를 5.x로 두면 `isin_mps_friendly` import 에러가 납니다. 반드시 `<5`로 고정.
-- `run.bat`에 `COQUI_TOS_AGREED=1`이 이미 들어있습니다 — XTTS-v2 라이선스(CPML, **비상업적 용도**) 동의를
-  헤드리스로 자동 처리하는 것이니, 사내 업무용으로만 쓰세요.
+회사망에서 `SSL: CERTIFICATE_VERIFY_FAILED` 가 나면 `venv\Scripts\python.exe -m pip install pip-system-certs` 를 먼저
+설치합니다(Windows 인증서 저장소를 쓰도록 패치).
 
-모델(`coqui/XTTS-v2`, 약 1.8GB)은 첫 요청 때 자동 다운로드되고, 목소리 샘플(5~10초 wav)은 웹 UI에서 처음 한 번 업로드하면 됩니다.
+모델(`Supertone/supertonic-3`, 약 385MB)은 첫 요청 때 `voice-gen\models\supertonic3\` 로 자동 다운로드됩니다.
+목소리는 정해진 10종(여성 F1~F5, 남성 M1~M5)에서 고르며, 참조 음성으로 목소리를 흉내 내는 기능은 없습니다.
+언어는 한국어·영어·일본어를 웹 UI 에서 고를 수 있습니다.
 
 ## 4. 3d-gen (3D 에셋)
 

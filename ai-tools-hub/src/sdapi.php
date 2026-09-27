@@ -236,8 +236,8 @@ function aihubGenerateVideo(array $params): array
 define('AIHUB_MUSIC_API_BASE', getenv('MUSIC_API_URL') ?: 'http://127.0.0.1:7862');
 
 /**
- * 로컬 MusicGen 서버(music-gen/server.py)를 통한 음악 생성.
- * @return array{ok: bool, audio?: string, error?: string}
+ * 로컬 음악 생성 서버(music-gen/server.py, ACE-Step 1.5 어댑터)를 통한 음악 생성.
+ * @return array{ok: bool, audio?: string, provenance?: array, error?: string}
  */
 function aihubGenerateMusic(array $params): array
 {
@@ -246,7 +246,9 @@ function aihubGenerateMusic(array $params): array
         return ['ok' => false, 'error' => '프롬프트를 입력해 주세요.'];
     }
 
-    $duration = max(3, min(30, (int)($params['duration'] ?? 8)));
+    $duration = max(10, min(240, (int)($params['duration'] ?? 30)));
+    // serve.ps1 의 max_execution_time(240초)보다 오래 걸릴 수 있다(첫 요청의 ACE-Step 기동 포함).
+    set_time_limit(1900);
 
     $ch = curl_init(AIHUB_MUSIC_API_BASE . '/generate');
     curl_setopt_array($ch, [
@@ -254,7 +256,8 @@ function aihubGenerateMusic(array $params): array
         CURLOPT_POSTFIELDS => json_encode(['prompt' => aihubTranslateToEnglishPrompt($prompt), 'duration' => $duration], JSON_UNESCAPED_UNICODE),
         CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 300,
+        // 첫 요청은 ACE-Step 프로세스 기동·모델 로딩까지 기다리므로 넉넉하게 잡는다.
+        CURLOPT_TIMEOUT => 1800,
         CURLOPT_CONNECTTIMEOUT => 5,
     ]);
     $raw = curl_exec($ch);
@@ -276,7 +279,7 @@ function aihubGenerateMusic(array $params): array
         return ['ok' => false, 'error' => "생성 실패 (HTTP {$status}): {$detail}"];
     }
 
-    return ['ok' => true, 'audio' => $data['audio']];
+    return ['ok' => true, 'audio' => $data['audio'], 'provenance' => $data['provenance'] ?? null];
 }
 
 define('AIHUB_WEBTOON_STYLE', 'webtoon style, clean lineart, cel shading, vibrant flat colors, manhwa panel, ');
@@ -565,8 +568,8 @@ function aihubGenerateSocial(array $params): array
 define('AIHUB_VOICE_API_BASE', getenv('VOICE_API_URL') ?: 'http://127.0.0.1:7863');
 
 /**
- * 로컬 Coqui XTTS-v2 서버(voice-gen/server.py)를 통한 음성 생성.
- * @return array{ok: bool, audio?: string, error?: string}
+ * 로컬 Supertonic 3 서버(voice-gen/server.py)를 통한 음성 생성.
+ * @return array{ok: bool, audio?: string, provenance?: array, error?: string}
  */
 function aihubGenerateVoice(array $params): array
 {
@@ -578,10 +581,8 @@ function aihubGenerateVoice(array $params): array
     $payload = [
         'text' => $text,
         'language' => (string)($params['language'] ?? 'ko'),
+        'voice' => (string)($params['voice'] ?? 'F1'),
     ];
-    if (!empty($params['speaker_wav'])) {
-        $payload['speaker_wav'] = (string)$params['speaker_wav'];
-    }
 
     $ch = curl_init(AIHUB_VOICE_API_BASE . '/generate');
     curl_setopt_array($ch, [
@@ -611,7 +612,7 @@ function aihubGenerateVoice(array $params): array
         return ['ok' => false, 'error' => $detail !== '' ? $detail : "생성 실패 (HTTP {$status})"];
     }
 
-    return ['ok' => true, 'audio' => $data['audio']];
+    return ['ok' => true, 'audio' => $data['audio'], 'provenance' => $data['provenance'] ?? null];
 }
 
 define('AIHUB_3D_API_BASE', getenv('AIHUB_3D_API_URL') ?: 'http://127.0.0.1:7864');

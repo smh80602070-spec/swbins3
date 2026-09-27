@@ -1,28 +1,39 @@
 # -*- coding: utf-8 -*-
 """
-로컬 Coqui XTTS-v2 음성 생성 API 서버. ai-tools-hub(PHP)가 이 서버(기본 포트 7863)로 요청을 보낸다.
-XTTS는 목소리를 흉내낼 짧은 참조 음성(레퍼런스 wav)이 필요하다.
-처음 요청에서 참조 음성을 업로드하면 reference.wav로 저장해서 이후 계속 재사용한다.
-VRAM이 넉넉하지 않아(sd-webui·music-gen·3d-gen과 동시에 켜두는 경우가 많음) 일정 시간
-미사용 시 자동으로 GPU 메모리에서 내린다(IDLE_UNLOAD_SECONDS, 기본 5분).
+로컬 Supertonic 3 음성 생성 API 서버. ai-tools-hub(PHP)가 이 서버(기본 포트 7863)로 요청을 보낸다.
+상업 사용이 막힌 Coqui XTTS-v2 대신 Supertonic 3(가중치 OpenRAIL-M, 코드 MIT)를 쓴다.
+정해진 목소리 10종(M1~M5 남성, F1~F5 여성) 가운데 하나를 고른다 — 참조 음성(목소리 흉내)은 없다.
+ONNX Runtime 으로 CPU 에서 돌아가므로 그래픽카드(NVIDIA·AMD)와 상관없이 동작한다.
+메모리를 아끼려고 일정 시간 미사용 시 모델을 내린다(IDLE_UNLOAD_SECONDS, 기본 5분).
 """
 import base64
 import gc
+import io
 import os
 import threading
 import time
 
-import torch
+import soundfile
 from flask import Flask, jsonify, request
-from TTS.api import TTS
+from supertonic import TTS
+from supertonic.config import MODEL_CONFIGS
 
-MODEL_NAME = "tts_models/multilingual/multi-dataset/xtts_v2"
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-REFERENCE_PATH = os.path.join(os.path.dirname(__file__), "reference.wav")
-OUTPUT_PATH = os.path.join(os.path.dirname(__file__), "_last_output.wav")
-_LOCAL_MODEL_DIR = os.path.join(os.path.dirname(__file__), "models", "xtts_v2")
-_LOCAL_CONFIG_PATH = os.path.join(_LOCAL_MODEL_DIR, "config.json")
+MODEL_NAME = "supertonic-3"
+MODEL_DIR = os.path.join(os.path.dirname(__file__), "models", "supertonic3")
+VOICES = ["M1", "M2", "M3", "M4", "M5", "F1", "F2", "F3", "F4", "F5"]
+LANGUAGES = ["ko", "en", "ja"]
 IDLE_UNLOAD_SECONDS = int(os.environ.get("IDLE_UNLOAD_SECONDS", "300"))
+
+# 결과물마다 붙여 주는 출처 기록. 게임에 넣을 때 어떤 모델·라이선스로 만들었는지 답할 수 있게 한다.
+PROVENANCE = {
+    "tool": "voice-gen",
+    "model": "Supertone/supertonic-3",
+    "model_revision": MODEL_CONFIGS[MODEL_NAME]["revision"],
+    "license": "OpenRAIL-M (model weights), MIT (code)",
+    "license_url": "https://huggingface.co/Supertone/supertonic-3/blob/main/LICENSE",
+    "commercial_use": True,
+    "note": "OpenRAIL-M Attachment A 의 금지 용도(남을 해치거나 속이는 용도 등)에는 쓸 수 없다.",
+}
 
 app = Flask(__name__)
 _lock = threading.Lock()
@@ -32,10 +43,8 @@ _state = {"tts": None, "last_used": 0.0}
 def get_tts():
     with _lock:
         if _state["tts"] is None:
-            if os.path.isfile(_LOCAL_CONFIG_PATH):
-                _state["tts"] = TTS(model_path=_LOCAL_MODEL_DIR, config_path=_LOCAL_CONFIG_PATH).to(DEVICE)
-            else:
-                _state["tts"] = TTS(MODEL_NAME).to(DEVICE)
+            # 모델이 폴더에 없으면 huggingface.co 에서 한 번 받아 MODEL_DIR 에 저장한다(약 400MB).
+            _state["tts"] = TTS(model=MODEL_NAME, model_dir=MODEL_DIR, auto_download=True)
         _state["last_used"] = time.time()
         return _state["tts"]
 
@@ -46,8 +55,6 @@ def _unload_tts():
             return
         _state["tts"] = None
     gc.collect()
-    if DEVICE == "cuda":
-        torch.cuda.empty_cache()
 
 
 def _idle_unload_watcher():
@@ -66,24 +73,15 @@ def generate():
     body = request.get_json(silent=True) or {}
     text = (body.get("text") or "").strip()
     language = (body.get("language") or "ko").strip()
-    speaker_wav_b64 = body.get("speaker_wav")
+    voice = (body.get("voice") or "F1").strip()
+    speed = max(0.7, min(2.0, float(body.get("speed") or 1.05)))
 
     if not text:
         return jsonify(ok=False, error="텍스트를 입력해 주세요."), 400
-
-    if speaker_wav_b64:
-        try:
-            with open(REFERENCE_PATH, "wb") as f:
-                f.write(base64.b64decode(speaker_wav_b64))
-        except Exception as exc:  # noqa: BLE001
-            app.logger.exception("참조 음성 저장 실패")
-            return jsonify(ok=False, error=f"참조 음성 저장 실패: {exc}"), 400
-
-    if not os.path.isfile(REFERENCE_PATH):
-        return jsonify(
-            ok=False,
-            error="참조 음성(목소리 샘플)이 없습니다. 5~10초 정도의 깨끗한 목소리 wav 파일을 먼저 업로드해 주세요.",
-        ), 400
+    if language not in LANGUAGES:
+        return jsonify(ok=False, error=f"지원하지 않는 언어입니다: {language}"), 400
+    if voice not in VOICES:
+        return jsonify(ok=False, error=f"없는 목소리입니다: {voice}"), 400
 
     try:
         tts = get_tts()
@@ -92,14 +90,15 @@ def generate():
         return jsonify(ok=False, error=f"모델 로드 실패: {exc}"), 500
 
     try:
-        tts.tts_to_file(text=text, speaker_wav=REFERENCE_PATH, language=language, file_path=OUTPUT_PATH)
-        with open(OUTPUT_PATH, "rb") as f:
-            audio_b64 = base64.b64encode(f.read()).decode("ascii")
+        style = tts.get_voice_style(voice_name=voice)
+        wav, _duration = tts.synthesize(text, voice_style=style, lang=language, speed=speed)
+        buf = io.BytesIO()
+        soundfile.write(buf, wav.squeeze(), tts.sample_rate, format="WAV")
+        audio_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
         _state["last_used"] = time.time()
-        return jsonify(ok=True, audio=audio_b64)
-    except torch.cuda.OutOfMemoryError:
-        app.logger.exception("GPU 메모리 부족")
-        return jsonify(ok=False, error="GPU 메모리가 부족합니다. 텍스트 길이를 줄여서 다시 시도해 주세요."), 500
+        provenance = dict(PROVENANCE, created_at=time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                          params={"text": text, "language": language, "voice": voice, "speed": speed})
+        return jsonify(ok=True, audio=audio_b64, provenance=provenance)
     except Exception as exc:  # noqa: BLE001
         app.logger.exception("생성 실패")
         return jsonify(ok=False, error=f"생성 실패: {exc}"), 500
@@ -107,8 +106,7 @@ def generate():
 
 @app.get("/health")
 def health():
-    return jsonify(ok=True, device=DEVICE, model_loaded=_state["tts"] is not None,
-                    has_reference=os.path.isfile(REFERENCE_PATH))
+    return jsonify(ok=True, device="cpu", model=MODEL_NAME, model_loaded=_state["tts"] is not None)
 
 
 if __name__ == "__main__":

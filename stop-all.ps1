@@ -56,7 +56,8 @@ if (Test-Path $pidFile) {
 }
 
 # 3) Secondary: anything still holding the known ports
-Get-NetTCPConnection -LocalPort 7860, 7862, 7863, 7864, 8611 -State Listen -ErrorAction SilentlyContinue |
+#    (8001 = ACE-Step API, launched on demand by music-gen/server.py from music-gen\ACE-Step-1.5)
+Get-NetTCPConnection -LocalPort 7860, 7862, 7863, 7864, 8001, 8611 -State Listen -ErrorAction SilentlyContinue |
     Select-Object -ExpandProperty OwningProcess -Unique |
     ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }
 

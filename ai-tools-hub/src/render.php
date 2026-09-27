@@ -178,13 +178,27 @@ function aihubRenderHome(array $tips): string
         <label data-opt="steps">스텝<input type="number" id="opt-steps" value="20" min="1" max="128"></label>
         <label data-opt="length">프레임 수<input type="number" id="opt-length" value="16" min="8" max="32"></label>
         <label data-opt="fps">FPS<input type="number" id="opt-fps" value="8" min="4" max="16"></label>
-        <label data-opt="duration">길이(초)<input type="number" id="opt-duration" value="8" min="3" max="30"></label>
+        <label data-opt="duration">길이(초)<input type="number" id="opt-duration" value="30" min="10" max="240"></label>
         <label data-opt="guidance">반영도<input type="number" id="opt-guidance" value="15" min="1" max="30"></label>
         <label data-opt="language">언어
           <select id="opt-language">
             <option value="ko" selected>한국어</option>
             <option value="en">영어</option>
             <option value="ja">일본어</option>
+          </select>
+        </label>
+        <label data-opt="voice">목소리
+          <select id="opt-voice">
+            <option value="F1" selected>여성 1</option>
+            <option value="F2">여성 2</option>
+            <option value="F3">여성 3</option>
+            <option value="F4">여성 4</option>
+            <option value="F5">여성 5</option>
+            <option value="M1">남성 1</option>
+            <option value="M2">남성 2</option>
+            <option value="M3">남성 3</option>
+            <option value="M4">남성 4</option>
+            <option value="M5">남성 5</option>
           </select>
         </label>
         <label data-opt="codelang">개발 언어
@@ -284,7 +298,7 @@ var GEN_TYPES = {
     promptLabel: '프롬프트 (영어일수록 결과가 좋습니다)',
     variants: { general: { label: '일반', endpoint: '/generate/music', opts: ['duration'],
                 placeholder: '예: lo-fi hip hop beat with soft piano and rain sounds',
-                hint: '로컬 MusicGen으로 생성합니다. 처음 실행할 때만 모델 로딩 때문에 더 걸립니다.' } }
+                hint: '로컬 ACE-Step 1.5(MIT 라이선스, 상업 사용 가능)로 가사 없는 연주곡을 생성합니다. 처음 실행할 때는 ACE-Step 서버 기동과 모델 로딩 때문에 몇 분 더 걸립니다.' } }
   },
   text: {
     icon: '📝', label: '텍스트', hasNegative: false, resultKind: 'text',
@@ -326,11 +340,11 @@ var GEN_TYPES = {
   },
   voice: {
     icon: '🔊', label: '음성', hasNegative: false, resultKind: 'audio', isVoice: true,
-    file: { label: '목소리 샘플(wav/mp3, 5~10초)', accept: 'audio/*', mode: 'base64', field: 'speaker_wav' },
+    file: null,
     promptLabel: '텍스트 (읽어줄 문장)',
-    variants: { general: { label: '일반', endpoint: '/generate/voice', opts: ['language'],
+    variants: { general: { label: '일반', endpoint: '/generate/voice', opts: ['language', 'voice'],
                 placeholder: '예: 안녕하세요, 오늘 회의는 3시에 시작합니다.',
-                hint: '로컬 Coqui XTTS-v2로 생성합니다. 목소리 샘플은 처음 한 번만 올리면 서버에 저장되어 계속 재사용됩니다.' } }
+                hint: '로컬 Supertonic 3(OpenRAIL-M, 상업 사용 가능)로 생성합니다. 정해진 목소리 10종 중에서 고릅니다(목소리 흉내는 지원하지 않음).' } }
   },
   model3d: {
     icon: '🧊', label: '3D 에셋', hasNegative: false, resultKind: 'model3d',
@@ -481,6 +495,25 @@ function renderResult(resultEl, kind, data) {
     audio.src = 'data:audio/wav;base64,' + data.audio;
     audio.controls = true; audio.autoplay = true;
     resultEl.appendChild(audio);
+
+    var name = (currentType === 'voice' ? 'voice-' : 'music-') + new Date().toISOString().replace(/[-:]/g, '').slice(0, 15);
+    var wavLink = document.createElement('a');
+    wavLink.className = 'model-download';
+    wavLink.href = audio.src;
+    wavLink.download = name + '.wav';
+    wavLink.textContent = '⬇ .wav 파일 다운로드';
+    resultEl.appendChild(wavLink);
+
+    // 게임 등에 넣을 때 어떤 모델·라이선스로 만들었는지 남겨 두는 출처 기록(<파일>.license.json).
+    if (data.provenance) {
+      var licLink = document.createElement('a');
+      licLink.className = 'model-download';
+      licLink.style.marginLeft = '14px';
+      licLink.href = URL.createObjectURL(new Blob([JSON.stringify(data.provenance, null, 2)], { type: 'application/json' }));
+      licLink.download = name + '.wav.license.json';
+      licLink.textContent = '⬇ 출처 기록(.license.json)';
+      resultEl.appendChild(licLink);
+    }
     return true;
   }
   if (kind === 'text' && data.text) {
@@ -589,8 +622,8 @@ function simulateProgress(statusEl, progressBar, estSeconds) {
 
 // 진행률 API가 없는 백엔드용 대략적인 예상 소요시간(초).
 function estimateSeconds(type, variant, body) {
-  if (type === 'music') { return Math.max(8, (body.duration || 8) * 4); }
-  if (type === 'voice') { return Math.max(8, ((body.text || '').length / 8)); }
+  if (type === 'music') { return Math.max(20, (body.duration || 30) * 2); }
+  if (type === 'voice') { return Math.max(3, ((body.text || '').length / 30)); }
   if (type === 'model3d') { return Math.max(15, ((body.steps || 64) / 64) * 45); }
   if (type === 'code' && variant === 'ui') { return 30; }
   if (type === 'code') { return 20; }
@@ -652,6 +685,7 @@ document.getElementById('gen-submit').addEventListener('click', function () {
     if (v.opts.indexOf('guidance') !== -1) { body.guidance_scale = parseFloat(document.getElementById('opt-guidance').value); }
     if (v.opts.indexOf('codelang') !== -1) { body.language = document.getElementById('opt-codelang').value; }
     if (v.opts.indexOf('language') !== -1) { body.language = document.getElementById('opt-language').value; }
+    if (v.opts.indexOf('voice') !== -1) { body.voice = document.getElementById('opt-voice').value; }
     if (v.opts.indexOf('websearch') !== -1) { body.web_search = document.getElementById('opt-websearch').checked; }
 
     statusEl.textContent = '생성 중입니다…';

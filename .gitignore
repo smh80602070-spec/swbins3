@@ -13,6 +13,7 @@ voice-gen/_last_output.wav
 3d-gen/__pycache__/
 3d-gen/models/
 music-gen/models/
+music-gen/ACE-Step-1.5/
 voice-gen/models/
 ollama/
 aider/venv/

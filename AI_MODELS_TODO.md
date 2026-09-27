@@ -1,6 +1,8 @@
 # 로컬 AI 생성 기능 — 받아야 할 모델 파일 목록
 
-> ⚠️ 음악(MusicGen)·음성(XTTS-v2)은 **비상업 전용** 모델이다 — 게임 등 상업용 결과물은 `COMMERCIAL_SWAP_TODO.md` 의 교체를 먼저 끝낸 뒤 만든다(2026-09-27).
+> ✅ 2026-09-28: 비상업 전용이던 음악(MusicGen)·음성(XTTS-v2)을 상업 허용 모델(ACE-Step 1.5 · Supertonic 3)로 바꿨다.
+> 모델별 라이선스 확인 결과는 `COMMERCIAL_SWAP_TODO.md` 의 표. 옛 모델 파일(`music-gen\models\musicgen-small\`,
+> `voice-gen\models\xtts_v2\`)이 남아 있어도 코드는 더 이상 쓰지 않는다 — 지워도 된다.
 
 회사 방화벽이 `huggingface.co` (전문/특화 AI 기타 정책)를 막고 있어서, 아래 파일들은 IT 예외 요청 후 다운로드하거나 다른 네트워크에서 받아서 옮겨야 합니다.
 
@@ -39,16 +41,20 @@ IT에 예외 요청할 때 도메인: `huggingface.co` + `*.cdn-lfs*.huggingface
 - 넣을 위치: `C:\swbins3\sd-webui\extensions\sd-webui-animatediff\model\`
 - 상태: ✅ 다운로드 완료 (이 PC 기준)
 
-## 3. 음악 생성 모델 (자동 다운로드, 수동 작업도 가능)
+## 3. 음악 생성 모델 — ACE-Step 1.5 (MIT)
 
-- 모델: `facebook/musicgen-small` (Hugging Face `transformers` 라이브러리가 최초 실행 시 자동으로 받음)
-- 용량: 약 2GB
-- 받는 곳(자동): huggingface.co (캐시 위치 `%USERPROFILE%\.cache\huggingface\`)
-- 받는 곳(수동, 직접 다운로드용): https://huggingface.co/facebook/musicgen-small/tree/main 에서 이 폴더의 파일 전체를 받아야 함
-  (핵심 가중치: https://huggingface.co/facebook/musicgen-small/resolve/main/model.safetensors, 그 외 config.json/generation_config.json/preprocessor_config.json/tokenizer 관련 파일들도 같은 폴더에서 전부 받기)
-- 넣을 위치: `C:\swbins3\music-gen\models\musicgen-small\` (폴더가 없으면 새로 만들고 받은 파일들을 그대로 복사)
-- ✅ 코드 반영 완료: `music-gen/server.py`가 이 폴더가 존재하면 자동으로 로컬 모델을 쓰고, 없으면 기존처럼 `facebook/musicgen-small`을 huggingface.co에서 자동 다운로드하도록 수정해둠 (인터넷 연결 불필요)
-- 상태: ✅ 다운로드 완료 (이 PC 기준)
+- 모델: `ACE-Step/Ace-Step1.5` 기본 묶음(DiT `acestep-v15-turbo`, VAE, 텍스트 인코더 Qwen3-Embedding-0.6B, LM 1.7B)
+  + VRAM 8GB 이하용 LM `ACE-Step/acestep-5Hz-lm-0.6B`
+- 라이선스: 코드·가중치 모두 MIT (HF 태그 `license:mit`, 게이트 없음 — 2026-09-28 확인)
+- 용량: 약 10GB 안팎(기본 묶음) + 0.6B LM
+- 받는 곳(명령): `music-gen\ACE-Step-1.5\` 안에서 `python -m acestep.model_downloader` 와
+  `python -m acestep.model_downloader --model acestep-5Hz-lm-0.6B --skip-main` (가상환경의 python — `SETUP_GUIDE*.md` 참고)
+- 받는 곳(수동): `huggingface-cli download ACE-Step/Ace-Step1.5 --local-dir ./checkpoints`,
+  `huggingface-cli download ACE-Step/acestep-5Hz-lm-0.6B --local-dir ./checkpoints/acestep-5Hz-lm-0.6B`
+- 넣을 위치: `C:\swbins3\music-gen\ACE-Step-1.5\checkpoints\`
+- 코드: `music-gen/server.py` 는 ACE-Step REST API(포트 8001)를 첫 요청 때 띄우고 5분 유휴 시 끄는 어댑터
+- 상태: ✅ 이 PC(RX 7600, ROCm 7.2)에 설치·모델 다운로드·곡 생성 확인 (2026-09-28, `checkpoints\` 약 11GB — LM 1.7B 포함)
+- 쓰지 않음: `facebook/musicgen-small` (가중치 CC-BY-NC 4.0, 비상업)
 
 ## 4. 문서 생성 모델 (Ollama, 명령어로 자동 다운로드)
 
@@ -72,21 +78,17 @@ IT에 예외 요청할 때 도메인: `huggingface.co` + `*.cdn-lfs*.huggingface
   → 받은 뒤 4번과 동일하게 `Modelfile` + `ollama create qwen2.5-coder:7b -f Modelfile`
 - 상태: ✅ 다운로드 + Ollama 등록 완료 (이 PC 기준)
 
-## 6. 음성 생성 모델 (자동 다운로드, 수동 작업도 가능)
+## 6. 음성 생성 모델 — Supertonic 3 (OpenRAIL-M)
 
-- 모델: `coqui/XTTS-v2` (Coqui `TTS` 라이브러리가 최초 실행 시 자동으로 받음)
-- 용량: 약 1.8GB
-- 받는 곳(자동): huggingface.co
-- 받는 곳(수동): https://huggingface.co/coqui/XTTS-v2/tree/main 에서 아래 파일들을 모두 받아 같은 폴더에 저장
-  - `config.json` (4.82KB) — https://huggingface.co/coqui/XTTS-v2/resolve/main/config.json
-  - `model.pth` (1.86GB) — https://huggingface.co/coqui/XTTS-v2/resolve/main/model.pth
-  - `dvae.pth` (211MB) — https://huggingface.co/coqui/XTTS-v2/resolve/main/dvae.pth
-  - `vocab.json` (335KB) — https://huggingface.co/coqui/XTTS-v2/resolve/main/vocab.json
-  - `mel_stats.pth` (1.07KB) — https://huggingface.co/coqui/XTTS-v2/resolve/main/mel_stats.pth
-- 넣을 위치: `C:\swbins3\voice-gen\models\xtts_v2\` (폴더가 없으면 새로 만들고 위 5개 파일을 그대로 복사)
-- ✅ 코드 반영 완료: `voice-gen/server.py`가 이 폴더에 `config.json`이 있으면 `model_path`/`config_path`로 로컬 모델을 직접 불러오고(캐시 폴더명 신경 쓸 필요 없음), 없으면 기존처럼 자동 다운로드하도록 수정해둠
-- ⚠️ 라이선스: XTTS-v2는 비상업적 용도(CPML 라이선스)입니다. `voice-gen/run.bat`에서 `COQUI_TOS_AGREED=1`로 동의를 자동 처리해뒀습니다 — 사내 업무용으로만 쓰고 상업적 배포는 하지 마세요.
-- 상태: ✅ 다운로드 완료 (이 PC 기준)
+- 모델: `Supertone/supertonic-3` (pip 패키지 `supertonic==1.3.1` 이 커밋 `724fb5ab…` 로 고정해서 받음)
+- 라이선스: 가중치 OpenRAIL-M(상업 허용, Attachment A 금지 용도만 제한), 코드 MIT — 2026-09-28 확인
+- 용량: 약 385MB (ONNX 4개 + 목소리 10종 JSON)
+- 받는 곳(자동): 첫 요청 때 huggingface.co 에서 받음
+- 받는 곳(수동): https://huggingface.co/Supertone/supertonic-3/tree/main 의 `onnx/`·`voice_styles/`·`config.json` 을 그대로 복사
+- 넣을 위치: `C:\swbins3\voice-gen\models\supertonic3\`
+- 참고: Supertone 이 2026-07 에 오픈소스 개발을 끝내고 저장소를 보관(archive) 처리했다. 가중치·라이선스는 그대로라 쓰는 데 문제없지만 업데이트는 없다.
+- 상태: ✅ 이 PC(RX 7600, CPU 로 동작)에서 설치·한국어 생성 확인 (2026-09-28)
+- 쓰지 않음: `coqui/XTTS-v2` (Coqui Public Model License, 비상업)
 
 ## 7. 3D 에셋 생성 모델 (자동 다운로드, 수동 작업도 가능)
 
@@ -172,4 +174,4 @@ huggingface.co에서 받아온다. 이 회사망은 huggingface.co 자체는 도
 curl.exe -I https://huggingface.co
 ```
 
-`200 OK`가 나오면 위 1·2번 파일을 받아서 해당 경로에 넣고, 음악은 그냥 사이트에서 "음악 생성"을 눌러보면 됩니다(첫 실행만 자동 다운로드로 시간이 걸림).
+`200 OK`가 나오면 위 1·2번 파일을 받아서 해당 경로에 넣고, 음악은 3번의 모델 받기 명령을 먼저 실행한 뒤 사이트에서 "음악 생성"을 눌러보면 됩니다(첫 실행은 ACE-Step 기동 때문에 시간이 걸림).
