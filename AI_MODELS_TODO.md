@@ -1,5 +1,7 @@
 # 로컬 AI 생성 기능 — 받아야 할 모델 파일 목록
 
+> ⚠️ 음악(MusicGen)·음성(XTTS-v2)은 **비상업 전용** 모델이다 — 게임 등 상업용 결과물은 `COMMERCIAL_SWAP_TODO.md` 의 교체를 먼저 끝낸 뒤 만든다(2026-09-27).
+
 회사 방화벽이 `huggingface.co` (전문/특화 AI 기타 정책)를 막고 있어서, 아래 파일들은 IT 예외 요청 후 다운로드하거나 다른 네트워크에서 받아서 옮겨야 합니다.
 
 IT에 예외 요청할 때 도메인: `huggingface.co` + `*.cdn-lfs*.huggingface.co` (또는 `*.huggingface.co` 전체), `ollama.com`, `registry.ollama.ai`, `openaipublic.azureedge.net`(3D 생성용, 7번 참고)
