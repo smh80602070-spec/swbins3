@@ -25,3 +25,6 @@ __pycache__/
 
 video-gen/venv/
 video-gen/models/
+
+# Serena(코드 탐색 도구)가 만드는 로컬 설정
+.serena/
