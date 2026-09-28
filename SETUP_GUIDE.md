@@ -11,7 +11,7 @@ git에는 `ai-tools-hub`, `music-gen/server.py`, `voice-gen/server.py`, `start-a
 - Ollama 설치: https://ollama.com (문서·코드 생성용, 이 저장소에 포함 안 됨)
 - 회사 네트워크라면 `huggingface.co`, `*.cdn-lfs*.huggingface.co`, `registry.ollama.ai`, `ollama.com` 방화벽 예외 필요 (전에 겪은 문제: "전문/특화 AI 기타" 정책으로 차단됨)
 
-## 1. sd-webui (이미지·동영상)
+## 1. sd-webui (이미지)
 
 ```powershell
 cd C:\swbins3
@@ -21,22 +21,22 @@ git clone --depth 1 https://github.com/AUTOMATIC1111/stable-diffusion-webui.git 
 `sd-webui\webui-user.bat`을 열어 이렇게 설정:
 
 ```bat
-set COMMANDLINE_ARGS=--api
+set COMMANDLINE_ARGS=--api --cors-allow-origins=http://127.0.0.1:8611 --medvram-sdxl
 set STABLE_DIFFUSION_REPO=https://github.com/w-e-w/stablediffusion.git
 ```
 
+(`--medvram-sdxl` 은 SDXL 일 때 UNet 만 VRAM 에 둔다 — VRAM 8GB 이하에서 SDXL 1024px 이 넘치지 않게. 12GB 이상이면 빼도 됨)
+
 (원래 `Stability-AI/stablediffusion` 저장소가 삭제되어서 미러로 바꿔야 함 — 안 하면 "Repository not found" 에러)
+(`--cors-allow-origins` 는 허브 화면이 sd-webui 의 진행률을 직접 읽게 한다 — 허브의 PHP 서버는 요청을 하나씩만 처리해서 생성 중에는 진행률 요청에 답하지 못함)
 
-AnimateDiff(동영상) 확장 설치:
-
-```powershell
-cd sd-webui\extensions
-git clone --depth 1 https://github.com/continue-revolution/sd-webui-animatediff.git
-```
+AnimateDiff(동영상) 확장은 **설치하지 않습니다** — 코드 라이선스가 CC BY-NC-SA 4.0(비상업)이라 게임 에셋용으로 쓸 수 없습니다.
+예전에 설치했다면 `sd-webui\extensions\sd-webui-animatediff\` 를 지웁니다. 동영상은 점검 중(`COMMERCIAL_SWAP_TODO.md` 순서 7).
 
 한국어 로케일(선택):
 
 ```powershell
+cd sd-webui\extensions
 git clone --depth 1 https://github.com/AUTOMATIC1111/stable-diffusion-webui-old-localizations.git
 ```
 
@@ -53,8 +53,6 @@ webui-user.bat
   venv\Scripts\python.exe -m pip install --no-build-isolation "https://github.com/openai/CLIP/archive/d50d76daa670286dd6cacf3bcd80b5e4823fc8e1.zip"
   ```
   그 다음 `webui-user.bat` 다시 실행.
-
-- AnimateDiff가 `No module named 'av'` 로 실패하면: `venv\Scripts\python.exe -m pip install av` 후 재실행.
 
 - 한국어 로케일 적용: 서버 뜬 뒤
   ```powershell

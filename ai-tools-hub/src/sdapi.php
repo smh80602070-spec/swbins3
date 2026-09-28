@@ -58,20 +58,97 @@ const AIHUB_CHECKPOINT_LICENSES = [
         'commercial_use' => true,
         'note' => '게임 크레딧에 "ReV Animated (s6yx)" 를 적는다.',
     ],
+    'sd_xl_base_1.0' => [
+        'model' => 'stabilityai/stable-diffusion-xl-base-1.0',
+        'license' => 'CreativeML OpenRAIL++-M',
+        'license_url' => 'https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/blob/main/LICENSE.md',
+        'commercial_use' => true,
+        'note' => 'OpenRAIL++-M Attachment A 의 금지 용도에는 쓸 수 없다.',
+    ],
+    'animagine-xl-4.0-opt' => [
+        'model' => 'cagliostrolab/animagine-xl-4.0 (4.0 Opt)',
+        'license' => 'CreativeML OpenRAIL++-M (SDXL 라이선스 그대로, 추가 제한 없음)',
+        'license_url' => 'https://huggingface.co/cagliostrolab/animagine-xl-4.0',
+        'commercial_use' => true,
+        'note' => '애니메 그림으로 학습된 모델이다 — 실존 작품의 캐릭터 이름·작가 화풍을 프롬프트에 넣지 않는다.',
+    ],
 ];
 
-const AIHUB_MOTION_MODULE_LICENSE = [
-    'model' => 'guoyww/AnimateDiff mm_sd15_v2 (conrevo/AnimateDiff-A1111 변환본)',
-    'license' => 'Apache-2.0',
-    'license_url' => 'https://huggingface.co/guoyww/animatediff',
-    'commercial_use' => true,
+/** SDXL 체크포인트에 같이 쓰는 VAE. SDXL 원본 VAE 는 fp16 에서 NaN(검은 그림)이 나서 보정판을 쓴다. */
+const AIHUB_VAE_LICENSES = [
+    'sdxl-vae-fp16-fix' => [
+        'model' => 'madebyollin/sdxl-vae-fp16-fix',
+        'license' => 'MIT',
+        'license_url' => 'https://huggingface.co/madebyollin/sdxl-vae-fp16-fix',
+        'commercial_use' => true,
+    ],
 ];
+
+/*
+ * 허브 기능별로 쓸 체크포인트(sd-webui models\Stable-diffusion 의 파일 이름, 확장자 제외). 앞에서부터 설치된 것을 쓴다.
+ * 요청마다 override_settings 로 지정하므로 sd-webui 에 어떤 체크포인트가 올라가 있든 기능에 맞는 모델로 생성한다.
+ * (동영상은 sd-webui 를 쓰지 않는다 — video-gen 서버 참고.)
+ */
+const AIHUB_CHECKPOINTS = [
+    'general' => ['sd_xl_base_1.0', 'v1-5-pruned-emaonly'],
+    'design' => ['sd_xl_base_1.0', 'v1-5-pruned-emaonly'],
+    'anime' => ['animagine-xl-4.0-opt', 'Counterfeit-V3.0_fp16', 'sd_xl_base_1.0', 'v1-5-pruned-emaonly'],
+];
+const AIHUB_SDXL_CHECKPOINTS = ['sd_xl_base_1.0', 'animagine-xl-4.0-opt'];
+define('AIHUB_SDXL_VAE', 'sdxl-vae-fp16-fix.safetensors');
+
+/** sd-webui 에 설치된 체크포인트 이름(확장자 제외) 목록. 실패하면 빈 배열(그때는 체크포인트를 지정하지 않는다). */
+function aihubInstalledCheckpoints(): array
+{
+    static $names = null;
+    if ($names !== null) {
+        return $names;
+    }
+    $ch = curl_init(AIHUB_SD_API_BASE . '/sdapi/v1/sd-models');
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 10, CURLOPT_CONNECTTIMEOUT => 5]);
+    $data = json_decode((string)curl_exec($ch), true);
+    curl_close($ch);
+    $names = is_array($data) ? array_map(fn($m) => (string)($m['model_name'] ?? ''), $data) : [];
+    return $names;
+}
+
+/**
+ * 허브 기능(general/design/anime/video)에 맞는 체크포인트와 그에 딸린 설정을 고른다.
+ * @return array{checkpoint: ?string, sdxl: bool, override_settings: array}
+ */
+function aihubPickCheckpoint(string $purpose): array
+{
+    $installed = aihubInstalledCheckpoints();
+    foreach (AIHUB_CHECKPOINTS[$purpose] ?? [] as $name) {
+        if (in_array($name, $installed, true)) {
+            $sdxl = in_array($name, AIHUB_SDXL_CHECKPOINTS, true);
+            return [
+                'checkpoint' => $name,
+                'sdxl' => $sdxl,
+                'override_settings' => [
+                    'sd_model_checkpoint' => $name,
+                    'sd_vae' => $sdxl ? AIHUB_SDXL_VAE : 'Automatic',
+                ],
+            ];
+        }
+    }
+    return ['checkpoint' => null, 'sdxl' => false, 'override_settings' => []];
+}
+
+/** SD 1.5 기준 크기(512×512, 768×512, 512×768)를 SDXL 학습 해상도의 같은 비율로 바꾼다. */
+function aihubSdxlSize(int $width, int $height): array
+{
+    if ($width === $height) {
+        return [1024, 1024];
+    }
+    return $width > $height ? [1216, 832] : [832, 1216];
+}
 
 /**
  * sd-webui 응답의 info(JSON 문자열)에서 실제로 쓰인 체크포인트·시드·프롬프트를 꺼내 출처 기록을 만든다.
  * 음악·음성 서버의 provenance 와 같은 모양이라 허브 화면이 .license.json 으로 내려받게 한다.
  */
-function aihubSdProvenance(array $data, string $tool, ?string $motionModule = null): array
+function aihubSdProvenance(array $data, string $tool): array
 {
     $info = json_decode((string)($data['info'] ?? ''), true);
     $info = is_array($info) ? $info : [];
@@ -84,9 +161,12 @@ function aihubSdProvenance(array $data, string $tool, ?string $motionModule = nu
         'note' => '라이선스를 확인하지 않은 체크포인트다 — 상업용으로 쓰기 전에 COMMERCIAL_SWAP_TODO.md 에 확인 결과를 적는다.',
     ];
 
+    $vae = preg_replace('/\.(safetensors|pt|ckpt)$/', '', (string)($info['sd_vae_name'] ?? ''));
+
     $provenance = ['tool' => $tool] + $license + [
         'checkpoint' => $checkpoint,
         'checkpoint_hash' => $info['sd_model_hash'] ?? null,
+        'vae' => $vae !== '' ? (['file' => $info['sd_vae_name']] + (AIHUB_VAE_LICENSES[$vae] ?? ['license' => 'unknown', 'commercial_use' => null])) : null,
         'created_at' => date('c'),
         'params' => [
             'prompt' => $info['prompt'] ?? null,
@@ -99,9 +179,6 @@ function aihubSdProvenance(array $data, string $tool, ?string $motionModule = nu
             'height' => $info['height'] ?? null,
         ],
     ];
-    if ($motionModule !== null) {
-        $provenance['motion_module'] = ['file' => $motionModule] + AIHUB_MOTION_MODULE_LICENSE;
-    }
     return $provenance;
 }
 
@@ -152,24 +229,45 @@ function aihubTranslateToEnglishPrompt(string $text): string
     return $translated !== '' ? $translated : $text;
 }
 
+// Animagine XL 4.0 모델 카드의 권장 품질 태그·네거티브 프롬프트·CFG(5).
+define('AIHUB_ANIMAGINE_QUALITY', ', masterpiece, high score, great score, absurdres');
+define('AIHUB_ANIMAGINE_NEGATIVE', 'lowres, bad anatomy, bad hands, text, error, missing finger, extra digits, fewer digits, cropped, worst quality, low quality, low score, bad score, average score, signature, watermark, username, blurry, ');
+
 /**
+ * $params['purpose'] 로 체크포인트를 고른다(general/design/anime, AIHUB_CHECKPOINTS). 크기는 SD 1.5 기준(512 계열)으로 받아
+ * SDXL 체크포인트면 같은 비율의 SDXL 해상도로 바꾼다.
  * @return array{ok: bool, images?: string[], error?: string}
  */
 function aihubGenerateImage(array $params): array
 {
+    $pick = aihubPickCheckpoint((string)($params['purpose'] ?? 'general'));
+    $width = (int)($params['width'] ?? 512);
+    $height = (int)($params['height'] ?? 512);
+    if ($pick['sdxl']) {
+        [$width, $height] = aihubSdxlSize($width, $height);
+    }
+    $animagine = $pick['checkpoint'] === 'animagine-xl-4.0-opt';
+
+    $prompt = aihubTranslateToEnglishPrompt((string)($params['prompt'] ?? ''));
+    $negative = aihubTranslateToEnglishPrompt((string)($params['negative_prompt'] ?? ''));
     $payload = [
-        'prompt' => aihubTranslateToEnglishPrompt((string)($params['prompt'] ?? '')),
-        'negative_prompt' => aihubTranslateToEnglishPrompt((string)($params['negative_prompt'] ?? '')),
-        'width' => (int)($params['width'] ?? 512),
-        'height' => (int)($params['height'] ?? 512),
+        'prompt' => $prompt !== '' && $animagine ? $prompt . AIHUB_ANIMAGINE_QUALITY : $prompt,
+        'negative_prompt' => $animagine ? AIHUB_ANIMAGINE_NEGATIVE . $negative : $negative,
+        'width' => $width,
+        'height' => $height,
         'steps' => (int)($params['steps'] ?? 20),
-        'cfg_scale' => 7,
+        'cfg_scale' => $animagine ? 5 : 7,
         'sampler_name' => 'Euler a',
         'seed' => (int)($params['seed'] ?? -1),
         'batch_size' => 1,
     ];
+    if ($pick['override_settings']) {
+        // 다음 요청도 같은 모델일 가능성이 높으니 되돌리지 않는다(체크포인트 교체는 수십 초 걸림).
+        $payload['override_settings'] = $pick['override_settings'];
+        $payload['override_settings_restore_afterwards'] = false;
+    }
 
-    if ($payload['prompt'] === '') {
+    if ($prompt === '') {
         return ['ok' => false, 'error' => '프롬프트를 입력해 주세요.'];
     }
 
@@ -182,13 +280,15 @@ function aihubGenerateImage(array $params): array
     }
 
     aihubMarkSdInUse();
+    // 체크포인트 교체(SDXL 약 7GB 로딩)가 끼면 serve.ps1 의 max_execution_time(240초)을 넘길 수 있다.
+    set_time_limit(700);
     $ch = curl_init(AIHUB_SD_API_BASE . $endpoint);
     curl_setopt_array($ch, [
         CURLOPT_POST => true,
         CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
         CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 180,
+        CURLOPT_TIMEOUT => 600,
         CURLOPT_CONNECTTIMEOUT => 5,
     ]);
     $raw = curl_exec($ch);
@@ -218,66 +318,50 @@ function aihubGenerateImage(array $params): array
     return ['ok' => true, 'images' => $data['images'], 'provenance' => aihubSdProvenance($data, 'sd-webui')];
 }
 
-// AI_MODELS_TODO.md 2번이 받는 파일 이름과 같아야 한다. 틀리면 AnimateDiff 가 조용히 꺼져 영상 대신 PNG 한 장이 온다.
-define('AIHUB_MOTION_MODULE', getenv('AIHUB_MOTION_MODULE') ?: 'mm_sd15_v2.safetensors');
+define('AIHUB_VIDEO_API_BASE', getenv('VIDEO_API_URL') ?: 'http://127.0.0.1:7865');
+// 2026-09-28: video-gen(diffusers AnimateDiff)이 이 PC 에서 글자 프롬프트만으로는 뭉개진 영상만 내서(공식 예제 그대로 fp32 로도 같음)
+// 고칠 때까지 꺼 둔다. 예전 sd-webui AnimateDiff 확장은 비상업 라이선스라 되돌리지 않는다. 시험할 때만 AIHUB_VIDEO_ENABLED=1.
+define('AIHUB_VIDEO_ENABLED', getenv('AIHUB_VIDEO_ENABLED') === '1');
 
 /**
- * AnimateDiff 확장(extensions/sd-webui-animatediff)을 통한 짧은 영상 클립 생성.
- * @return array{ok: bool, video?: string, error?: string}
+ * 로컬 동영상 서버(video-gen/server.py, diffusers AnimateDiff)를 통한 짧은 영상 클립 생성.
+ * 예전의 sd-webui AnimateDiff 확장은 코드 라이선스가 CC BY-NC-SA 4.0(비상업)이라 쓰지 않는다.
+ * @return array{ok: bool, video?: string, provenance?: array, error?: string}
  */
 function aihubGenerateVideo(array $params): array
 {
+    if (!AIHUB_VIDEO_ENABLED) {
+        return ['ok' => false, 'error' => '동영상 생성은 점검 중입니다. 예전 방식(sd-webui AnimateDiff 확장)은 비상업 라이선스라 뺐고, 상업 사용이 가능한 새 방식은 아직 품질 문제를 고치는 중입니다.'];
+    }
+
     $prompt = trim((string)($params['prompt'] ?? ''));
     if ($prompt === '') {
         return ['ok' => false, 'error' => '프롬프트를 입력해 주세요.'];
     }
 
-    $videoLength = max(8, min(32, (int)($params['video_length'] ?? 16)));
-
     $payload = [
         'prompt' => aihubTranslateToEnglishPrompt($prompt),
         'negative_prompt' => aihubTranslateToEnglishPrompt((string)($params['negative_prompt'] ?? '')),
-        'width' => (int)($params['width'] ?? 512),
-        'height' => (int)($params['height'] ?? 512),
+        'width' => (int)($params['width'] ?? 384),
+        'video_length' => (int)($params['video_length'] ?? 16),
+        'fps' => (int)($params['fps'] ?? 8),
         'steps' => (int)($params['steps'] ?? 20),
-        'cfg_scale' => 7,
-        'sampler_name' => 'Euler a',
-        'seed' => -1,
-        'batch_size' => 1,
-        'alwayson_scripts' => [
-            'AnimateDiff' => [
-                'args' => [[
-                    'model' => AIHUB_MOTION_MODULE,
-                    'format' => ['MP4'],
-                    'enable' => true,
-                    'video_length' => $videoLength,
-                    'fps' => (int)($params['fps'] ?? 8),
-                    'loop_number' => 0,
-                    'closed_loop' => 'R+P',
-                    'batch_size' => 16,
-                    'stride' => 1,
-                    'overlap' => -1,
-                ]],
-            ],
-        ],
     ];
-
     $refImage = trim((string)($params['init_image'] ?? ''));
-    $endpoint = '/sdapi/v1/txt2img';
     if ($refImage !== '') {
-        $payload['init_images'] = [$refImage];
+        $payload['init_image'] = $refImage;
         $payload['denoising_strength'] = (float)($params['denoising_strength'] ?? 0.6);
-        $endpoint = '/sdapi/v1/img2img';
     }
 
-    aihubMarkSdInUse();
-    $ch = curl_init(AIHUB_SD_API_BASE . $endpoint);
+    // 512×512·32프레임이면 10분을 넘길 수 있다(serve.ps1 의 max_execution_time 은 240초).
+    set_time_limit(1900);
+    $ch = curl_init(AIHUB_VIDEO_API_BASE . '/generate');
     curl_setopt_array($ch, [
         CURLOPT_POST => true,
         CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
         CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
         CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT => 600,
+        CURLOPT_TIMEOUT => 1800,
         CURLOPT_CONNECTTIMEOUT => 5,
     ]);
     $raw = curl_exec($ch);
@@ -288,29 +372,18 @@ function aihubGenerateVideo(array $params): array
 
     if ($errno !== 0) {
         aihubLogError("영상 생성 연결 실패: {$error}");
-        return ['ok' => false, 'error' => "로컬 영상 생성 서버(sd-webui)에 연결할 수 없습니다: {$error}"];
+        return ['ok' => false, 'error' => "로컬 영상 생성 서버(video-gen)에 연결할 수 없습니다: {$error}"];
     }
 
     $data = json_decode((string)$raw, true);
 
-    if ($status !== 200 || !is_array($data)) {
-        $detail = is_array($data) ? ($data['error'] ?? $data['detail'] ?? '') : substr((string)$raw, 0, 200);
+    if (!is_array($data) || empty($data['ok'])) {
+        $detail = is_array($data) ? ($data['error'] ?? '') : substr((string)$raw, 0, 200);
         aihubLogError("영상 생성 실패 (HTTP {$status}): {$detail}");
-        return ['ok' => false, 'error' => "생성 실패 (HTTP {$status}): {$detail}"];
+        return ['ok' => false, 'error' => $detail !== '' ? $detail : "생성 실패 (HTTP {$status})"];
     }
 
-    if (empty($data['images'])) {
-        aihubLogError('영상 생성 응답에 images가 없음(체크포인트·모션 모듈 미준비 가능성)');
-        return ['ok' => false, 'error' => '영상이 생성되지 않았습니다. 체크포인트·모션 모듈이 준비되어 있는지 확인해 주세요.'];
-    }
-
-    // MP4 는 4번째 바이트부터 'ftyp' 로 시작한다. 아니면 AnimateDiff 가 꺼진 채 이미지가 온 것이다.
-    if (substr((string)base64_decode(substr($data['images'][0], 0, 16)), 4, 4) !== 'ftyp') {
-        aihubLogError('영상 생성 응답이 MP4 가 아님 — 모션 모듈(' . AIHUB_MOTION_MODULE . ') 파일을 AnimateDiff 가 못 찾았을 가능성');
-        return ['ok' => false, 'error' => '영상 대신 이미지가 생성됐습니다. 모션 모듈 파일(' . AIHUB_MOTION_MODULE . ')이 sd-webui\extensions\sd-webui-animatediff\model 에 있는지 확인해 주세요.'];
-    }
-
-    return ['ok' => true, 'video' => $data['images'][0], 'provenance' => aihubSdProvenance($data, 'sd-webui + AnimateDiff', AIHUB_MOTION_MODULE)];
+    return ['ok' => true, 'video' => $data['video'], 'provenance' => $data['provenance'] ?? null];
 }
 
 define('AIHUB_MUSIC_API_BASE', getenv('MUSIC_API_URL') ?: 'http://127.0.0.1:7862');
@@ -376,6 +449,7 @@ function aihubGenerateWebtoon(array $params): array
     }
 
     return aihubGenerateImage([
+        'purpose' => 'anime',
         'prompt' => AIHUB_WEBTOON_STYLE . aihubTranslateToEnglishPrompt($prompt),
         'negative_prompt' => trim('photo, realistic, 3d render, ' . aihubTranslateToEnglishPrompt((string)($params['negative_prompt'] ?? ''))),
         'width' => 512,
@@ -400,6 +474,7 @@ function aihubGenerateDesign(array $params): array
     }
 
     return aihubGenerateImage([
+        'purpose' => 'design',
         'prompt' => AIHUB_DESIGN_STYLE . aihubTranslateToEnglishPrompt($prompt),
         'negative_prompt' => trim('photo, realistic, blurry, watermark, ' . aihubTranslateToEnglishPrompt((string)($params['negative_prompt'] ?? ''))),
         'width' => (int)($params['width'] ?? 512),
@@ -425,6 +500,7 @@ function aihubGenerateAsset2D(array $params): array
     }
 
     return aihubGenerateImage([
+        'purpose' => 'anime',
         'prompt' => AIHUB_ASSET2D_STYLE . aihubTranslateToEnglishPrompt($prompt),
         'negative_prompt' => trim('photo, realistic, text, watermark, blurry, cluttered background, multiple objects, ' . aihubTranslateToEnglishPrompt((string)($params['negative_prompt'] ?? ''))),
         'width' => 512,
@@ -918,7 +994,8 @@ function aihubPing(string $url): bool
 function aihubCheckStatus(): array
 {
     return [
-        ['name' => '이미지·동영상 (sd-webui, 7860)', 'ok' => aihubPing(AIHUB_SD_API_BASE . '/sdapi/v1/options')],
+        ['name' => '이미지 (sd-webui, 7860)', 'ok' => aihubPing(AIHUB_SD_API_BASE . '/sdapi/v1/options')],
+        ['name' => AIHUB_VIDEO_ENABLED ? '동영상 (video-gen, 7865)' : '동영상 (video-gen, 7865 — 점검 중이라 꺼 둠)', 'ok' => aihubPing(AIHUB_VIDEO_API_BASE . '/health')],
         ['name' => '음악 (music-gen, 7862)', 'ok' => aihubPing(AIHUB_MUSIC_API_BASE . '/health')],
         ['name' => '음성 (voice-gen, 7863)', 'ok' => aihubPing(AIHUB_VOICE_API_BASE . '/health')],
         ['name' => '문서·코드 (Ollama, 11434)', 'ok' => aihubPing(AIHUB_OLLAMA_API_BASE . '/api/tags')],

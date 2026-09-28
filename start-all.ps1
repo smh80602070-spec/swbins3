@@ -1,4 +1,4 @@
-# Starts the 5 AI generation servers fully hidden (no console window at all).
+# Starts the AI generation servers fully hidden (no console window at all).
 # Each server's stdout/stderr is redirected to logs\<name>.out.log / .err.log,
 # so if something goes wrong, check the log file instead of a popup console.
 #
@@ -42,6 +42,8 @@ Write-Host "Starting all AI generation servers in background (hidden, no console
 Start-Hidden -Name "sd-webui"     -WorkingDirectory (Join-Path $root "sd-webui")     -FilePath "cmd.exe" -Arguments "/c webui-user.bat < NUL"
 Start-Hidden -Name "music-gen"    -WorkingDirectory (Join-Path $root "music-gen")    -FilePath "cmd.exe" -Arguments "/c run.bat < NUL"
 Start-Hidden -Name "voice-gen"    -WorkingDirectory (Join-Path $root "voice-gen")    -FilePath "cmd.exe" -Arguments "/c run.bat < NUL"
+# video-gen is disabled for now (see COMMERCIAL_SWAP_TODO.md, step 7) - AIHUB_VIDEO_ENABLED=1 to test it.
+# Start-Hidden -Name "video-gen"    -WorkingDirectory (Join-Path $root "video-gen")    -FilePath "cmd.exe" -Arguments "/c run.bat < NUL"
 Start-Hidden -Name "3d-gen"       -WorkingDirectory (Join-Path $root "3d-gen")       -FilePath "cmd.exe" -Arguments "/c run.bat < NUL"
 Start-Hidden -Name "ai-tools-hub" -WorkingDirectory (Join-Path $root "ai-tools-hub") -FilePath "powershell.exe" -Arguments "-NoProfile -ExecutionPolicy Bypass -File serve.ps1"
 Start-Hidden -Name "sd-idle-watchdog" -WorkingDirectory $root -FilePath "powershell.exe" -Arguments "-NoProfile -ExecutionPolicy Bypass -File sd-webui-idle-watchdog.ps1"

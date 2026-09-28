@@ -29,11 +29,17 @@ powershell -ExecutionPolicy Bypass -File serve.ps1 -Port 8700
 
 | 종류 | 백엔드 | 포트 |
 |---|---|---|
-| 이미지·동영상·웹툰/만화·디자인·2D 에셋 | `sd-webui`(AUTOMATIC1111 + AnimateDiff) | 7860 |
-| 음악 | `music-gen`(MusicGen) | 7862 |
-| 음성 | `voice-gen`(Coqui XTTS-v2) | 7863 |
+| 이미지·디자인 | `sd-webui`(AUTOMATIC1111, SDXL base) | 7860 |
+| 웹툰/만화·2D 에셋 | `sd-webui`(Animagine XL 4.0 Opt) | 7860 |
+| 동영상(점검 중, 꺼 둠) | `video-gen`(diffusers AnimateDiff) — 예전 sd-webui AnimateDiff 확장은 비상업 라이선스라 뺐음 | 7865 |
+| 음악 | `music-gen`(ACE-Step 1.5 어댑터, ACE-Step API 8001 을 필요할 때 띄움) | 7862 |
+| 음성 | `voice-gen`(Supertonic 3, 정해진 목소리 10종) | 7863 |
 | 3D 에셋 | `3d-gen`(Shap-E) | 7864 |
-| 문서·코드·UI·SNS/블로그, 한국어→영어 프롬프트 번역 | Ollama | 11434 |
+| 문서·코드·UI·SNS/블로그, 한국어→영어 프롬프트 번역 | Ollama(qwen2.5) | 11434 |
+
+모두 무료이고 결과물을 상업적으로 쓸 수 있는 모델입니다(라이선스 확인 결과: `C:\swbins3\COMMERCIAL_SWAP_TODO.md`).
+결과 아래의 `⬇ 출처 기록(.license.json)` 으로 어떤 모델·라이선스로 만들었는지 파일과 함께 남길 수 있습니다.
+sd-webui 는 기능별로 알맞은 체크포인트로 허브가 요청마다 바꿔 씁니다(`sdapi.php` 의 `AIHUB_CHECKPOINTS`) — 바꿀 때 수십 초가 더 걸립니다.
 
 필요한 모델 파일은 `C:\swbins3\AI_MODELS_TODO.md`에 정리되어 있습니다.
 

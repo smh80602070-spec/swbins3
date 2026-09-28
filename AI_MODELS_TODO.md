@@ -27,21 +27,27 @@ IT에 예외 요청할 때 도메인: `huggingface.co` + `*.cdn-lfs*.huggingface
 
 ## 1. 이미지 생성용 체크포인트 (필수)
 
-- 파일: `v1-5-pruned-emaonly.safetensors`
-- 용량: 약 4GB
-- 받는 곳: https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/v1-5-pruned-emaonly.safetensors
-- 넣을 위치: `C:\swbins3\sd-webui\models\Stable-diffusion\`
-- 상태: ✅ 다운로드 완료 (예전 NVIDIA PC, 그리고 2026-09-28 RX 7600 PC — 허브 경유 이미지 생성까지 확인)
+허브가 기능별로 아래 체크포인트를 골라 씁니다(`sdapi.php` 의 `AIHUB_CHECKPOINTS`, 없으면 다음 후보). 넣을 위치는 모두
+`C:\swbins3\sd-webui\models\Stable-diffusion\`, 파일 이름은 바꾸지 않습니다(허브가 이 이름으로 찾음).
 
-## 2. 동영상 생성용 모션 모듈 (필수)
+| 파일 | 용량 | 받는 곳 | 허브에서 쓰는 곳 |
+|---|---|---|---|
+| `sd_xl_base_1.0.safetensors` | 6.9GB | https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors | 이미지 일반·디자인 |
+| `animagine-xl-4.0-opt.safetensors` | 6.9GB | https://huggingface.co/cagliostrolab/animagine-xl-4.0/resolve/main/animagine-xl-4.0-opt.safetensors | 웹툰/만화·2D 게임 에셋 |
+| `v1-5-pruned-emaonly.safetensors` | 4GB | https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/v1-5-pruned-emaonly.safetensors | SDXL 이 없을 때 대신 |
 
-- 파일: `mm_sd15_v2.safetensors`
-- 용량: 약 909MB
-- 받는 곳: https://huggingface.co/conrevo/AnimateDiff-A1111/resolve/main/motion_module/mm_sd15_v2.safetensors
-- 넣을 위치: `C:\swbins3\sd-webui\extensions\sd-webui-animatediff\model\`
-- ⚠️ 파일 이름을 바꾸지 않는다 — 허브(`sdapi.php` 의 `AIHUB_MOTION_MODULE`)가 이 이름으로 요청한다. 2026-09-28 전까지 허브 기본값이
-  `mm_sd_v15_v2.safetensors` 로 틀려 있어서, 파일을 못 찾은 AnimateDiff 가 조용히 꺼지고 영상 대신 PNG 한 장이 왔다(지금은 고침).
-- 상태: ✅ 다운로드 완료 (예전 NVIDIA PC, 그리고 2026-09-28 RX 7600 PC — 허브 경유 영상 생성까지 확인)
+SDXL 용 VAE(필수): `sdxl-vae-fp16-fix.safetensors`(0.33GB) — https://huggingface.co/madebyollin/sdxl-vae-fp16-fix/resolve/main/sdxl.vae.safetensors
+를 받아 이 이름으로 `C:\swbins3\sd-webui\models\VAE\` 에 넣습니다(SDXL 원본 VAE 는 fp16 에서 검은 그림이 나옴).
+
+- 큰 파일은 중간에 끊기면 sd-webui 가 `SafetensorError ... MetadataIncompleteBuffer` 를 냅니다. `curl -C -` 로 이어받고 크기·해시를 확인합니다.
+- 상태: ✅ 2026-09-28 RX 7600 PC 에 셋 다 받고 허브 경유 생성까지 확인
+
+## 2. 동영상 — 점검 중
+
+- sd-webui AnimateDiff 확장(`continue-revolution/sd-webui-animatediff`)은 **CC BY-NC-SA 4.0(비상업)** 이라 뺐습니다. 이 PC 에서는 확장 폴더를 지웠고,
+  다른 PC 에 남아 있으면 `sd-webui\extensions\sd-webui-animatediff\` 를 지웁니다.
+- 대신 쓰려는 `video-gen`(diffusers, 포트 7865)은 품질 문제로 꺼 둔 상태입니다 — `COMMERCIAL_SWAP_TODO.md` 순서 7.
+  video-gen 이 쓰는 모델(`video-gen\models\`, gitignore): `sd15\`(stable-diffusion-v1-5 의 fp16 diffusers 파일), `motion-adapter-v1-5-2\`, `mm_sd_v15_v2.ckpt`(원본).
 
 ## 3. 음악 생성 모델 — ACE-Step 1.5 (MIT)
 

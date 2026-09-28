@@ -6,8 +6,9 @@ CUDA를 못 쓰기 때문에 몇 군데를 다르게 가야 합니다.
 검증 상태(2026-09-28, RX 7600 8GB · Windows 11 · AMD 드라이버 2026-08):
 - ✅ 음악(ACE-Step 1.5, ROCm 7.2) — 설치부터 곡 생성까지 이 PC 에서 실행해 확인
 - ✅ 음성(Supertonic 3) — 이 PC 에서 실행해 확인
-- ✅ 이미지·동영상(원본 AUTOMATIC1111 + ROCm 7.2) — 설치부터 허브를 통한 이미지·영상 생성까지 이 PC 에서 확인
-- ✅ 허브(PHP 8.3) — 이 PC 에서 이미지·영상·음성·음악 요청과 출처 기록까지 확인
+- ✅ 이미지(원본 AUTOMATIC1111 + ROCm 7.2, SDXL base·Animagine XL 4.0) — 설치부터 허브를 통한 생성까지 이 PC 에서 확인
+- ✅ 허브(PHP 8.3) — 이 PC 에서 이미지·음성·음악 요청, 진행률, 출처 기록까지 확인
+- ⬜ 동영상 — 점검 중(`COMMERCIAL_SWAP_TODO.md` 순서 7)
 
 ## 왜 그대로 안 되는지
 
@@ -15,13 +16,12 @@ CUDA를 못 쓰기 때문에 몇 군데를 다르게 가야 합니다.
   (Python 3.12 전용, AMD 드라이버 26.1.1 이상)이 있고, 이미지(sd-webui)·음악(ACE-Step)은 이걸로 돌립니다.
 - 원본 A1111 은 Python 3.10 기준이라 3.12 에서 몇 가지를 맞춰 줘야 합니다 — 필요한 파일은 저장소의 `sd-webui-rocm\` 에 있습니다.
 
-## 이미지·동영상(sd-webui) — 원본 AUTOMATIC1111 + Windows ROCm 7.2 (추천, 검증됨)
+## 이미지(sd-webui) — 원본 AUTOMATIC1111 + Windows ROCm 7.2 (추천, 검증됨)
 
 ```powershell
 cd C:\swbins3
 git clone --depth 1 https://github.com/AUTOMATIC1111/stable-diffusion-webui.git sd-webui
 cd sd-webui\extensions
-git clone --depth 1 https://github.com/continue-revolution/sd-webui-animatediff.git
 git clone --depth 1 https://github.com/AUTOMATIC1111/stable-diffusion-webui-old-localizations.git
 cd ..
 xcopy /e /i ..\sd-webui-rocm\extensions\rocm-tweaks extensions\rocm-tweaks
@@ -41,7 +41,7 @@ venv\Scripts\python.exe -m pip install --no-build-isolation "https://github.com/
 webui-user.bat
 ```
 
-모델 파일(SD 1.5 체크포인트, 모션 모듈 `mm_sd15_v2.safetensors`)은 `AI_MODELS_TODO.md` 1·2번. 첫 실행은 보조 저장소 복제와
+모델 파일(SDXL base, Animagine XL 4.0, SD 1.5, SDXL 용 VAE)은 `AI_MODELS_TODO.md` 1번. AnimateDiff 확장은 비상업 라이선스라 설치하지 않습니다. 첫 실행은 보조 저장소 복제와
 패키지 설치로 몇 분 걸리고, "creating model quickly: OSError ... None" 이 한 번 찍히는 건 정상입니다(느린 방식으로 다시 만듦).
 
 `sd-webui-rocm\` 에 있는 것과 이유(2026-09-28 설치하며 하나씩 부딪힌 것):
@@ -51,6 +51,8 @@ webui-user.bat
 | `webui-user.bat` | `PYTHON` 을 venv 의 python 으로 지정 | PATH 의 `python` 이 Microsoft Store 가짜 실행 파일이라 "Couldn't launch python" |
 | 〃 | `REQS_FILE` 로 아래 요구 목록 사용 | Python 3.12 용 설치 파일이 없는 옛 버전을 소스로 빌드하다 실패 |
 | 〃 | `MIOPEN_FIND_MODE=FAST` | 첫 생성 때 합성곱 방식을 전수 탐색하느라 10분 넘게 멈춘 것처럼 보임 |
+| 〃 | `--medvram-sdxl` | SDXL 일 때 UNet 만 VRAM 에 두고 나머지를 CPU 로 내림. 없으면 SDXL 1024px 이 공유 메모리로 넘쳐 한 장 5분 이상(있으면 42초) |
+| 〃 | `--cors-allow-origins=http://127.0.0.1:8611` | 허브 화면이 sd-webui 진행률을 직접 읽음. 없으면 생성 중 진행률이 멈춰 보임(허브 PHP 서버는 요청을 하나씩만 처리) |
 | `requirements_versions_py312.txt` | Pillow 10.4 · scikit-image 0.22 · blendmodes 2024.1.1 · numpy 1.26.4 · transformers 4.36.2 · accelerate 0.25.0 | 설치 실패, 또는 `accelerate 0.21` 이 ROCm 윈도우 PyTorch 에 없는 `torch.distributed` 를 불러오다 기동 실패 |
 | `extensions\rocm-tweaks` | MIOpen 끄기(`torch.backends.cudnn.enabled = False`) | 512×512·20스텝 한 장이 **136초**(끄면 **5초**). MIOpen 을 켜고 `cudnn.benchmark` 를 써도 91초 |
 
@@ -58,15 +60,12 @@ webui-user.bat
 
 | 요청 | 걸린 시간 |
 |---|---|
-| 이미지 512×512, 20스텝 | 4~5초 |
-| 영상 16프레임, 20스텝, 384×384 | 약 2.5분 |
-| 영상 16프레임, 20스텝, 512×512 | 약 9분 |
+| SDXL 1024×1024(또는 1216×832), 20스텝, 같은 체크포인트로 연달아 | 약 42초 |
+| 체크포인트가 바뀌는 첫 요청(SDXL base ↔ Animagine, 약 7GB 로딩) | 58~95초 |
+| SD 1.5 512×512, 20스텝(SDXL 이 없는 PC) | 4~5초 |
 
-- 영상이 512×512 에서 크게 느린 까닭: 이 PyTorch 빌드에는 메모리를 아끼는 어텐션 커널이 없어서 16프레임 어텐션 행렬이
-  VRAM 8GB 를 넘고, 넘친 만큼 시스템 RAM(공유 GPU 메모리)으로 흘러 PCIe 로 오간다. 그래서 허브 영상 탭의 크기 기본값을 384×384 로 둔다.
-- sd-webui 설정의 `batch_cond_uncond` 를 끄면 영상이 10% 남짓 빨라진다(설정 → Optimizations, 또는
-  `curl.exe -X POST -H "Content-Type: application/json" -d "{\"batch_cond_uncond\":false}" http://127.0.0.1:7860/sdapi/v1/options`).
-  sd-webui 의 `config.json` 에 저장되니 한 번만 하면 된다.
+- 예전에 AnimateDiff 확장을 쓰던 때는 영상 요청을 한 번 거치면 그 뒤 SDXL 이 한 스텝 15초로 느려졌다(확장이 모델 교체 뒤에도 메모리를 붙잡음).
+  확장을 뺀 뒤로는 없음.
 
 ## (대안) 옵션 A — DirectML / 옵션 B — ZLUDA — 미검증
 

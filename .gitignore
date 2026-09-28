@@ -22,3 +22,6 @@ aider/__pycache__/
 bash.exe.stackdump
 logs/
 __pycache__/
+
+video-gen/venv/
+video-gen/models/

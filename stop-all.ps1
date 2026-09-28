@@ -1,4 +1,4 @@
-# Stops the 6 processes (sd-webui, music-gen, voice-gen, 3d-gen, ai-tools-hub,
+# Stops the 7 processes (sd-webui, music-gen, voice-gen, video-gen, 3d-gen, ai-tools-hub,
 # sd-idle-watchdog) started by start-all.ps1.
 #
 # Primary method: kill any process whose command line / executable path contains one of
@@ -13,14 +13,14 @@ $root = $PSScriptRoot
 $logs = Join-Path $root "logs"
 $pidFile = Join-Path $logs "running.pids"
 
-$serviceDirs = @('sd-webui', 'music-gen', 'voice-gen', '3d-gen', 'ai-tools-hub') |
+$serviceDirs = @('sd-webui', 'music-gen', 'voice-gen', 'video-gen', '3d-gen', 'ai-tools-hub') |
     ForEach-Object { (Join-Path $root $_).ToLower() }
 
 Write-Host "Stopping AI generation servers..."
 
 $killed = [System.Collections.Generic.HashSet[int]]::new()
 
-# 1) Path-based: kill anything running from under the 5 service folders
+# 1) Path-based: kill anything running from under the 6 service folders
 Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | ForEach-Object {
     $cl = $_.CommandLine
     $ep = $_.ExecutablePath
@@ -57,7 +57,7 @@ if (Test-Path $pidFile) {
 
 # 3) Secondary: anything still holding the known ports
 #    (8001 = ACE-Step API, launched on demand by music-gen/server.py from music-gen\ACE-Step-1.5)
-Get-NetTCPConnection -LocalPort 7860, 7862, 7863, 7864, 8001, 8611 -State Listen -ErrorAction SilentlyContinue |
+Get-NetTCPConnection -LocalPort 7860, 7862, 7863, 7864, 7865, 8001, 8611 -State Listen -ErrorAction SilentlyContinue |
     Select-Object -ExpandProperty OwningProcess -Unique |
     ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }
 

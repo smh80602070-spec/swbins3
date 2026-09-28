@@ -170,9 +170,9 @@ function aihubRenderHome(array $tips): string
       <div class="opt-row">
         <label data-opt="size">크기
           <select id="opt-size">
-            <option value="512x512" selected>512×512</option>
-            <option value="768x512">768×512 (가로형)</option>
-            <option value="512x768">512×768 (세로형)</option>
+            <option value="512x512" selected>정사각형 (SDXL 1024×1024)</option>
+            <option value="768x512">가로형 (SDXL 1216×832)</option>
+            <option value="512x768">세로형 (SDXL 832×1216)</option>
           </select>
         </label>
         <label data-opt="videosize">크기
@@ -271,6 +271,8 @@ function aihubRenderHome(array $tips): string
   </main>
 </div>
 <script>
+var VIDEO_PROGRESS_URL = <?php echo json_encode((defined('AIHUB_VIDEO_API_BASE') ? AIHUB_VIDEO_API_BASE : 'http://127.0.0.1:7865') . '/progress'); ?>;
+var SD_DIRECT_PROGRESS_URL = <?php echo json_encode((defined('AIHUB_SD_API_BASE') ? AIHUB_SD_API_BASE : 'http://127.0.0.1:7860') . '/sdapi/v1/progress?skip_current_image=true'); ?>;
 // 타입마다 "종류"(variant)를 두어 비슷한 백엔드를 쓰는 항목을 하나의 사이드바 메뉴로 묶는다.
 var GEN_TYPES = {
   image: {
@@ -280,25 +282,25 @@ var GEN_TYPES = {
     variants: {
       general: { label: '일반', endpoint: '/generate/image', opts: ['size', 'steps'], sdProgress: true,
                  placeholder: '예: a cozy cabin in a snowy forest, warm lighting, digital painting',
-                 hint: '로컬 Stable Diffusion(sd-webui)으로 생성합니다. 참고 이미지를 첨부하면 그 이미지를 바탕으로 변형합니다(img2img).' },
+                 hint: '로컬 SDXL(sd-webui)로 생성합니다. SDXL 이 없으면 SD 1.5(512 크기)로 생성합니다. 참고 이미지를 첨부하면 그 이미지를 바탕으로 변형합니다(img2img).' },
       webtoon: { label: '웹툰/만화', endpoint: '/generate/webtoon', opts: ['steps'], sdProgress: true,
                  placeholder: '예: a girl looking at the sunset, school rooftop',
-                 hint: '웹툰/만화 스타일 프리셋(세로 컷, 클린 라인아트)을 적용합니다.' },
+                 hint: '웹툰/만화 스타일 프리셋(세로 컷, 클린 라인아트)을 애니 화풍 모델(Animagine XL 4.0)로 생성합니다.' },
       design: { label: '디자인(로고·포스터)', endpoint: '/generate/design', opts: ['size', 'steps'], sdProgress: true,
                 placeholder: '예: minimalist logo for a coffee shop, letter M, line art',
                 hint: '플랫 디자인/로고·포스터 프리셋을 적용합니다. 텍스트 렌더링은 정확하지 않을 수 있습니다.' },
       asset2d: { label: '2D 게임 에셋', endpoint: '/generate/asset2d', opts: ['steps'], sdProgress: true,
                  placeholder: '예: healing potion bottle icon, fantasy RPG item',
-                 hint: '2D 게임 아이콘/스프라이트 프리셋(단색 배경, 중앙 정렬)을 적용합니다. Godot·Unity엔 배경 제거가 별도로 필요합니다.' }
+                 hint: '2D 게임 아이콘/스프라이트 프리셋(단색 배경, 중앙 정렬)을 애니 화풍 모델(Animagine XL 4.0)로 생성합니다. Godot·Unity엔 배경 제거가 별도로 필요합니다.' }
     }
   },
   video: {
     icon: '🎬', label: '동영상', hasNegative: true, resultKind: 'video',
     file: { label: '참고 이미지(선택)', accept: 'image/*', mode: 'base64', field: 'init_image' },
     promptLabel: '프롬프트 (영어일수록 결과가 좋습니다)',
-    variants: { general: { label: '일반', endpoint: '/generate/video', opts: ['videosize', 'length', 'fps', 'steps'], sdProgress: true,
+    variants: { general: { label: '일반', endpoint: '/generate/video', opts: ['videosize', 'length', 'fps', 'steps'], progressUrl: VIDEO_PROGRESS_URL,
                 placeholder: '예: a cat walking on a beach, waves, sunset, smooth motion',
-                hint: 'AnimateDiff(로컬 sd-webui 확장)로 짧은 클립을 생성합니다. VRAM 8GB(RX 7600) 기준 16프레임·20스텝이 384×384 약 2.5분, 512×512 약 9분 걸립니다.' } }
+                hint: '⚠️ 점검 중 — 예전 방식(sd-webui AnimateDiff 확장)은 비상업 라이선스라 뺐고, 상업 사용이 가능한 새 방식(video-gen)은 품질 문제를 고치는 중입니다.' } }
   },
   music: {
     icon: '🎵', label: '음악', hasNegative: false, resultKind: 'audio', file: null,
@@ -590,12 +592,29 @@ function renderResult(resultEl, kind, data) {
 }
 
 // sd-webui 진행률(/progress/sd)을 폴링해 실제 %를 보여준다.
-function pollSdProgress(statusEl, progressBar) {
+// PHP 내장 서버는 요청을 한 번에 하나만 처리해서, 생성 요청이 도는 동안에는 허브의 /progress/sd 가 응답하지 못한다.
+// 그래서 sd-webui 에서 직접 읽는다(sd-webui 를 --cors-allow-origins=<허브 주소> 로 띄워야 함). 안 되면 /progress/sd 로 돌아간다.
+var sdDirectProgressOk = true;
+
+function fetchSdProgress(url) {
+  if (url) {
+    return fetch(url).then(function (res) { return res.json(); });
+  }
+  if (sdDirectProgressOk) {
+    return fetch(SD_DIRECT_PROGRESS_URL)
+      .then(function (res) { return res.json(); })
+      .then(function (d) { return { ok: true, progress: d.progress, eta_relative: d.eta_relative }; })
+      .catch(function () { sdDirectProgressOk = false; return fetchSdProgress(); });
+  }
+  return fetch('/progress/sd').then(function (res) { return res.json(); });
+}
+
+// url 이 있으면 그 서버(예: video-gen /progress)에서, 없으면 sd-webui 에서 진행률을 읽는다.
+function pollSdProgress(statusEl, progressBar, url) {
   var stopped = false;
   function tick() {
     if (stopped) { return; }
-    fetch('/progress/sd')
-      .then(function (res) { return res.json(); })
+    fetchSdProgress(url)
       .then(function (data) {
         if (stopped) { return; }
         if (data.ok) {
@@ -699,8 +718,8 @@ document.getElementById('gen-submit').addEventListener('click', function () {
     if (v.opts.indexOf('websearch') !== -1) { body.web_search = document.getElementById('opt-websearch').checked; }
 
     statusEl.textContent = '생성 중입니다…';
-    var stopProgress = v.sdProgress
-      ? pollSdProgress(statusEl, progressBar)
+    var stopProgress = (v.sdProgress || v.progressUrl)
+      ? pollSdProgress(statusEl, progressBar, v.progressUrl)
       : simulateProgress(statusEl, progressBar, estimateSeconds(currentType, currentVariant, body));
 
     fetch(v.endpoint, {
