@@ -21,3 +21,4 @@ aider/__pycache__/
 .aider*
 bash.exe.stackdump
 logs/
+__pycache__/
