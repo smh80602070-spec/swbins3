@@ -175,6 +175,13 @@ function aihubRenderHome(array $tips): string
             <option value="512x768">512×768 (세로형)</option>
           </select>
         </label>
+        <label data-opt="videosize">크기
+          <select id="opt-videosize">
+            <option value="384" selected>384×384 (빠름)</option>
+            <option value="448">448×448</option>
+            <option value="512">512×512 (느림)</option>
+          </select>
+        </label>
         <label data-opt="steps">스텝<input type="number" id="opt-steps" value="20" min="1" max="128"></label>
         <label data-opt="length">프레임 수<input type="number" id="opt-length" value="16" min="8" max="32"></label>
         <label data-opt="fps">FPS<input type="number" id="opt-fps" value="8" min="4" max="16"></label>
@@ -289,9 +296,9 @@ var GEN_TYPES = {
     icon: '🎬', label: '동영상', hasNegative: true, resultKind: 'video',
     file: { label: '참고 이미지(선택)', accept: 'image/*', mode: 'base64', field: 'init_image' },
     promptLabel: '프롬프트 (영어일수록 결과가 좋습니다)',
-    variants: { general: { label: '일반', endpoint: '/generate/video', opts: ['length', 'fps', 'steps'], sdProgress: true,
+    variants: { general: { label: '일반', endpoint: '/generate/video', opts: ['videosize', 'length', 'fps', 'steps'], sdProgress: true,
                 placeholder: '예: a cat walking on a beach, waves, sunset, smooth motion',
-                hint: 'AnimateDiff(로컬 sd-webui 확장)로 짧은 클립을 생성합니다. GPU VRAM 6GB급 기준 1~수 분 걸릴 수 있습니다.' } }
+                hint: 'AnimateDiff(로컬 sd-webui 확장)로 짧은 클립을 생성합니다. VRAM 8GB(RX 7600) 기준 16프레임·20스텝이 384×384 약 2.5분, 512×512 약 9분 걸립니다.' } }
   },
   music: {
     icon: '🎵', label: '음악', hasNegative: false, resultKind: 'audio', file: null,
@@ -476,11 +483,34 @@ function readFileAsText(file, callback) {
   reader.readAsText(file);
 }
 
+// 결과 파일 다운로드 링크와, 게임 등에 넣을 때 어떤 모델·라이선스로 만들었는지 남겨 두는
+// 출처 기록(<파일>.license.json) 링크를 붙인다. 파일 이름은 둘이 짝이 되도록 같은 이름을 쓴다.
+function appendDownloads(resultEl, href, ext, provenance) {
+  var name = currentType + '-' + new Date().toISOString().replace(/[-:]/g, '').slice(0, 15) + '.' + ext;
+  var fileLink = document.createElement('a');
+  fileLink.className = 'model-download';
+  fileLink.href = href;
+  fileLink.download = name;
+  fileLink.textContent = '⬇ .' + ext + ' 파일 다운로드';
+  resultEl.appendChild(fileLink);
+
+  if (provenance) {
+    var licLink = document.createElement('a');
+    licLink.className = 'model-download';
+    licLink.style.marginLeft = '14px';
+    licLink.href = URL.createObjectURL(new Blob([JSON.stringify(provenance, null, 2)], { type: 'application/json' }));
+    licLink.download = name + '.license.json';
+    licLink.textContent = '⬇ 출처 기록(.license.json)';
+    resultEl.appendChild(licLink);
+  }
+}
+
 function renderResult(resultEl, kind, data) {
   if (kind === 'image' && data.images && data.images.length) {
     var img = document.createElement('img');
     img.src = 'data:image/png;base64,' + data.images[0];
     resultEl.appendChild(img);
+    appendDownloads(resultEl, img.src, 'png', data.provenance);
     return true;
   }
   if (kind === 'video' && data.video) {
@@ -488,6 +518,7 @@ function renderResult(resultEl, kind, data) {
     video.src = 'data:video/mp4;base64,' + data.video;
     video.controls = true; video.autoplay = true; video.loop = true;
     resultEl.appendChild(video);
+    appendDownloads(resultEl, video.src, 'mp4', data.provenance);
     return true;
   }
   if (kind === 'audio' && data.audio) {
@@ -495,25 +526,7 @@ function renderResult(resultEl, kind, data) {
     audio.src = 'data:audio/wav;base64,' + data.audio;
     audio.controls = true; audio.autoplay = true;
     resultEl.appendChild(audio);
-
-    var name = (currentType === 'voice' ? 'voice-' : 'music-') + new Date().toISOString().replace(/[-:]/g, '').slice(0, 15);
-    var wavLink = document.createElement('a');
-    wavLink.className = 'model-download';
-    wavLink.href = audio.src;
-    wavLink.download = name + '.wav';
-    wavLink.textContent = '⬇ .wav 파일 다운로드';
-    resultEl.appendChild(wavLink);
-
-    // 게임 등에 넣을 때 어떤 모델·라이선스로 만들었는지 남겨 두는 출처 기록(<파일>.license.json).
-    if (data.provenance) {
-      var licLink = document.createElement('a');
-      licLink.className = 'model-download';
-      licLink.style.marginLeft = '14px';
-      licLink.href = URL.createObjectURL(new Blob([JSON.stringify(data.provenance, null, 2)], { type: 'application/json' }));
-      licLink.download = name + '.wav.license.json';
-      licLink.textContent = '⬇ 출처 기록(.license.json)';
-      resultEl.appendChild(licLink);
-    }
+    appendDownloads(resultEl, audio.src, 'wav', data.provenance);
     return true;
   }
   if (kind === 'text' && data.text) {
@@ -570,13 +583,7 @@ function renderResult(resultEl, kind, data) {
     viewer.setAttribute('auto-rotate', '');
     viewer.setAttribute('shadow-intensity', '1');
     resultEl.appendChild(viewer);
-
-    var link = document.createElement('a');
-    link.className = 'model-download';
-    link.href = blobUrl;
-    link.download = 'model.glb';
-    link.textContent = '⬇ .glb 파일 다운로드';
-    resultEl.appendChild(link);
+    appendDownloads(resultEl, blobUrl, 'glb', data.provenance);
     return true;
   }
   return false;
@@ -677,6 +684,9 @@ document.getElementById('gen-submit').addEventListener('click', function () {
       var size = document.getElementById('opt-size').value.split('x');
       body.width = parseInt(size[0], 10);
       body.height = parseInt(size[1], 10);
+    }
+    if (v.opts.indexOf('videosize') !== -1) {
+      body.width = body.height = parseInt(document.getElementById('opt-videosize').value, 10);
     }
     if (v.opts.indexOf('steps') !== -1) { body.steps = parseInt(document.getElementById('opt-steps').value, 10); }
     if (v.opts.indexOf('length') !== -1) { body.video_length = parseInt(document.getElementById('opt-length').value, 10); }

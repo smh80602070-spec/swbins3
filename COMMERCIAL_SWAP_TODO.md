@@ -39,18 +39,21 @@
 ## 이 PC 조건 (2026-09-27)
 
 - 그래픽카드 **AMD Radeon RX 7600 (8GB)**, RAM 32GB. 기존 설정 문서는 NVIDIA 6GB PC 기준으로 검증됨.
-- `SETUP_GUIDE_RADEON.md` 는 음악(ACE-Step ROCm)·음성(Supertonic) 절이 검증됨. 이미지(sd-webui) 절은 **미검증**.
-- 이 PC 에는 `sd-webui/`·`ollama` 가 **아직 없다**(gitignore 대상이라 PC 마다 설치). `music-gen/ACE-Step-1.5/` 는 설치됨.
+- `SETUP_GUIDE_RADEON.md` 는 이미지·동영상(A1111 + ROCm 7.2)·음악(ACE-Step)·음성(Supertonic)·허브(PHP) 절이 검증됨. 3D 절은 **미검증**.
+- 이 PC 에 설치됨: `sd-webui/`, `music-gen/ACE-Step-1.5/`, voice-gen, PHP 8.3 + 허브. **아직 없음**: `ollama`(문서·코드·프롬프트 번역), 3d-gen.
 
 ## 순서
 
-1. ⬜ 이 PC 에서 이미지(SD 1.5)부터 돌게 한다 — 라데온 안내서대로, 막힌 곳은 안내서에 고쳐 적는다.
+1. ✅ 이 PC 에서 이미지(SD 1.5)·동영상(AnimateDiff)이 돈다 — 원본 A1111 + ROCm 7.2. 막힌 곳과 해결은 라데온 안내서에 적음 (2026-09-28).
 2. ✅ 표의 ⚠️ 항목(애니 체크포인트·AnimateDiff) 라이선스 원문 확인 → 표 갱신 (2026-09-28).
 3. ✅ 음악 교체: ACE-Step 1.5 로 `music-gen/server.py` 를 바꾸고, 이 PC 에 ROCm 7.2 로 설치해 15·30·120초 곡 생성 확인 (2026-09-28).
    시험 곡: `out\music-samples\` (gitignore 대상).
 4. ✅ 음성 교체: Supertonic 3 로 `voice-gen/server.py` 교체, 허브 음성 탭에서 참조 음성 올리기를 없애고 목소리 선택을 넣음. 이 PC 에서 한국어 생성 확인.
-5. 🔶 결과물 출처 기록: 음악·음성은 서버가 응답에 `provenance`(모델·커밋·라이선스·생성 시각·프롬프트)를 넣고, 허브가 결과 아래에
-   `⬇ 출처 기록(.license.json)` 링크를 띄운다. **남은 일**: 이미지·동영상(sd-webui)·3D 에도 같은 기록을 붙이기.
+5. ✅ 결과물 출처 기록: 모든 결과(이미지·동영상·음악·음성·3D)에 `provenance`(모델·라이선스·상업 허용 여부·생성 시각·프롬프트·시드)를 붙이고,
+   허브가 결과 아래에 `⬇ 파일 다운로드` 와 짝이 되는 `⬇ 출처 기록(<파일>.license.json)` 링크를 띄운다.
+   - 이미지·동영상은 sd-webui 응답에 적힌 실제 체크포인트 이름으로 `sdapi.php` 의 `AIHUB_CHECKPOINT_LICENSES` 표를 찾는다.
+     표에 없는 체크포인트로 만들면 `commercial_use: null` 로 나간다 — 새 체크포인트를 쓰려면 라이선스를 확인하고 이 표와 위 판정 표에 같이 적는다.
+   - 이 PC 에서 이미지·동영상·음악·음성은 허브를 거쳐 확인. 3D 는 3d-gen 을 아직 설치하지 않아 미확인.
 6. ✅ `AI_MODELS_TODO.md` 의 음악·음성 절을 새 모델로 바꾸고, 옛 비상업 모델은 "쓰지 않음"으로 표시.
 
 ## 하지 말 것

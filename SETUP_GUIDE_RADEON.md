@@ -6,42 +6,73 @@ CUDA를 못 쓰기 때문에 몇 군데를 다르게 가야 합니다.
 검증 상태(2026-09-28, RX 7600 8GB · Windows 11 · AMD 드라이버 2026-08):
 - ✅ 음악(ACE-Step 1.5, ROCm 7.2) — 설치부터 곡 생성까지 이 PC 에서 실행해 확인
 - ✅ 음성(Supertonic 3) — 이 PC 에서 실행해 확인
-- ⬜ 이미지·동영상(sd-webui, 옵션 A·B) — 아직 **미검증**. 막히면 에러를 그대로 알려 주세요.
+- ✅ 이미지·동영상(원본 AUTOMATIC1111 + ROCm 7.2) — 설치부터 허브를 통한 이미지·영상 생성까지 이 PC 에서 확인
+- ✅ 허브(PHP 8.3) — 이 PC 에서 이미지·영상·음성·음악 요청과 출처 기록까지 확인
 
 ## 왜 그대로 안 되는지
 
 - PyTorch 공식 ROCm(AMD GPU 가속) 빌드는 Linux 용입니다. Windows 는 AMD 가 따로 내는 **ROCm 7.2 휠**
-  (Python 3.12 전용, AMD 드라이버 26.1.1 이상)이 있고, 음악(ACE-Step 1.5)은 이걸로 돌립니다 — 아래 "음악" 절.
-- 이미지(sd-webui)는 아래 옵션 A·B 중 하나를 고릅니다.
+  (Python 3.12 전용, AMD 드라이버 26.1.1 이상)이 있고, 이미지(sd-webui)·음악(ACE-Step)은 이걸로 돌립니다.
+- 원본 A1111 은 Python 3.10 기준이라 3.12 에서 몇 가지를 맞춰 줘야 합니다 — 필요한 파일은 저장소의 `sd-webui-rocm\` 에 있습니다.
 
-## 옵션 A — DirectML (공식, 안전하지만 느림)
-
-Microsoft의 DirectML을 통해 DirectX 12로 도는 방식. 설정은 간단하지만 CUDA보다 훨씬 느리고,
-일부 연산은 지원이 안 돼서 자동으로 CPU로 떨어지기도 합니다.
-
-**sd-webui (이미지·동영상)**
-
-원본 AUTOMATIC1111 대신, AMD/DirectML을 공식 지원하는 포크를 씁니다:
+## 이미지·동영상(sd-webui) — 원본 AUTOMATIC1111 + Windows ROCm 7.2 (추천, 검증됨)
 
 ```powershell
-git clone --depth 1 https://github.com/lshqqytiger/stable-diffusion-webui-amdgpu.git sd-webui
+cd C:\swbins3
+git clone --depth 1 https://github.com/AUTOMATIC1111/stable-diffusion-webui.git sd-webui
+cd sd-webui\extensions
+git clone --depth 1 https://github.com/continue-revolution/sd-webui-animatediff.git
+git clone --depth 1 https://github.com/AUTOMATIC1111/stable-diffusion-webui-old-localizations.git
+cd ..
+xcopy /e /i ..\sd-webui-rocm\extensions\rocm-tweaks extensions\rocm-tweaks
+copy /y ..\sd-webui-rocm\webui-user.bat webui-user.bat
+py -3.12 -m venv venv
+venv\Scripts\python.exe -m pip install --upgrade pip
+venv\Scripts\python.exe -m pip install `
+  https://repo.radeon.com/rocm/windows/rocm-rel-7.2/rocm_sdk_core-7.2.0.dev0-py3-none-win_amd64.whl `
+  https://repo.radeon.com/rocm/windows/rocm-rel-7.2/rocm_sdk_devel-7.2.0.dev0-py3-none-win_amd64.whl `
+  https://repo.radeon.com/rocm/windows/rocm-rel-7.2/rocm_sdk_libraries_custom-7.2.0.dev0-py3-none-win_amd64.whl `
+  https://repo.radeon.com/rocm/windows/rocm-rel-7.2/rocm-7.2.0.dev0.tar.gz
+venv\Scripts\python.exe -m pip install `
+  https://repo.radeon.com/rocm/windows/rocm-rel-7.2/torch-2.9.1+rocmsdk20260116-cp312-cp312-win_amd64.whl `
+  https://repo.radeon.com/rocm/windows/rocm-rel-7.2/torchvision-0.24.1+rocmsdk20260116-cp312-cp312-win_amd64.whl
+venv\Scripts\python.exe -m pip install --upgrade "setuptools<70" wheel
+venv\Scripts\python.exe -m pip install --no-build-isolation "https://github.com/openai/CLIP/archive/d50d76daa670286dd6cacf3bcd80b5e4823fc8e1.zip"
+webui-user.bat
 ```
 
-`webui-user.bat`에 `--use-directml` 옵션 추가:
+모델 파일(SD 1.5 체크포인트, 모션 모듈 `mm_sd15_v2.safetensors`)은 `AI_MODELS_TODO.md` 1·2번. 첫 실행은 보조 저장소 복제와
+패키지 설치로 몇 분 걸리고, "creating model quickly: OSError ... None" 이 한 번 찍히는 건 정상입니다(느린 방식으로 다시 만듦).
 
-```bat
-set COMMANDLINE_ARGS=--api --use-directml
-```
+`sd-webui-rocm\` 에 있는 것과 이유(2026-09-28 설치하며 하나씩 부딪힌 것):
 
-나머지(레포 미러 교체, AnimateDiff 확장 등)는 `SETUP_GUIDE.md`와 동일합니다.
+| 파일 | 하는 일 | 없으면 |
+|---|---|---|
+| `webui-user.bat` | `PYTHON` 을 venv 의 python 으로 지정 | PATH 의 `python` 이 Microsoft Store 가짜 실행 파일이라 "Couldn't launch python" |
+| 〃 | `REQS_FILE` 로 아래 요구 목록 사용 | Python 3.12 용 설치 파일이 없는 옛 버전을 소스로 빌드하다 실패 |
+| 〃 | `MIOPEN_FIND_MODE=FAST` | 첫 생성 때 합성곱 방식을 전수 탐색하느라 10분 넘게 멈춘 것처럼 보임 |
+| `requirements_versions_py312.txt` | Pillow 10.4 · scikit-image 0.22 · blendmodes 2024.1.1 · numpy 1.26.4 · transformers 4.36.2 · accelerate 0.25.0 | 설치 실패, 또는 `accelerate 0.21` 이 ROCm 윈도우 PyTorch 에 없는 `torch.distributed` 를 불러오다 기동 실패 |
+| `extensions\rocm-tweaks` | MIOpen 끄기(`torch.backends.cudnn.enabled = False`) | 512×512·20스텝 한 장이 **136초**(끄면 **5초**). MIOpen 을 켜고 `cudnn.benchmark` 를 써도 91초 |
 
-## 옵션 B — ZLUDA (비공식, 훨씬 빠르지만 설정이 더 복잡함)
+측정값(RX 7600, 허브 경유):
 
-CUDA 호출을 라데온에서 그대로 돌려주는 비공식 번역 레이어입니다. 최신 RDNA2/3 카드에서
-DirectML보다 체감상 훨씬 빠르지만(거의 네이티브급), 공식 지원이 아니라 웹UI 업데이트에
-깨질 수 있습니다. 위 포크(`lshqqytiger/stable-diffusion-webui-amdgpu`)가 ZLUDA 설치 스크립트도
-같이 제공합니다 — 저장소의 `webui-user.bat` 안내와 README(ZLUDA 섹션)를 그대로 따라가면 됩니다.
-음악·음성은 아래 절대로 따로 설치합니다(ZLUDA 불필요).
+| 요청 | 걸린 시간 |
+|---|---|
+| 이미지 512×512, 20스텝 | 4~5초 |
+| 영상 16프레임, 20스텝, 384×384 | 약 2.5분 |
+| 영상 16프레임, 20스텝, 512×512 | 약 9분 |
+
+- 영상이 512×512 에서 크게 느린 까닭: 이 PyTorch 빌드에는 메모리를 아끼는 어텐션 커널이 없어서 16프레임 어텐션 행렬이
+  VRAM 8GB 를 넘고, 넘친 만큼 시스템 RAM(공유 GPU 메모리)으로 흘러 PCIe 로 오간다. 그래서 허브 영상 탭의 크기 기본값을 384×384 로 둔다.
+- sd-webui 설정의 `batch_cond_uncond` 를 끄면 영상이 10% 남짓 빨라진다(설정 → Optimizations, 또는
+  `curl.exe -X POST -H "Content-Type: application/json" -d "{\"batch_cond_uncond\":false}" http://127.0.0.1:7860/sdapi/v1/options`).
+  sd-webui 의 `config.json` 에 저장되니 한 번만 하면 된다.
+
+## (대안) 옵션 A — DirectML / 옵션 B — ZLUDA — 미검증
+
+위 ROCm 방식이 안 될 때만. `lshqqytiger/stable-diffusion-webui-amdgpu` 포크를 쓰고 Python 3.10 이 필요합니다.
+- A(DirectML): `set COMMANDLINE_ARGS=--api --use-directml`. 설정은 간단하지만 느리고 일부 연산이 CPU 로 떨어짐.
+- B(ZLUDA): `--use-zluda`. 빠르지만 비공식이고 HIP SDK 를 시스템에 따로 설치해야 함. 포크 README 의 ZLUDA 절대로.
 
 ## 음악(ACE-Step 1.5) — Windows ROCm 7.2
 
@@ -97,16 +128,29 @@ venv_rocm\Scripts\python.exe -m acestep.model_downloader --model acestep-5Hz-lm-
 ONNX Runtime 으로 CPU 에서 돌기 때문에 라데온이라고 따로 할 일이 없습니다. `SETUP_GUIDE.md` 3번 그대로.
 (2026-09-28 이 PC — RX 7600 — 에서 설치·한국어 생성까지 확인: 첫 요청 약 10초(모델 385MB 다운로드 포함), 이후 1초 안팎.)
 
-## 옵션 C — 그냥 CPU로
+## 그냥 CPU로
 
-아무 설정 없이 되지만 이미지 하나에 수 분, 음악/음성은 그보다 더 걸릴 수 있습니다.
-GPU 세팅이 막힐 때 임시로 확인용으로만 쓰는 걸 권장합니다.
+아무 설정 없이 되지만 이미지 하나에 수 분, 음악은 그보다 훨씬 더 걸립니다. GPU 세팅이 막힐 때 확인용으로만 씁니다.
+
+## 3D(3d-gen, Shap-E)
+
+이 PC 에는 아직 설치하지 않았습니다(미검증). Shap-E 는 PyTorch 스크립트라 sd-webui 와 같은 ROCm 7.2 휠을 venv 에 넣으면
+될 것으로 보지만, 품질이 낮아 게임 에셋으로는 초안 정도라 우선순위를 낮춰 두었습니다.
+
+## 허브(ai-tools-hub) — PHP
+
+`SETUP_GUIDE.md` 7번과 같습니다. winget 으로 설치한 PHP 에는 `php.ini` 가 없어서 `curl` 등 확장이 꺼져 있으니 먼저 켭니다:
+
+```powershell
+winget install --id PHP.PHP.8.3
+# 설치 폴더(%LOCALAPPDATA%\Microsoft\WinGet\Packages\PHP.PHP.8.3_...)에서 php.ini-production 을 php.ini 로 복사한 뒤
+# extension_dir = "ext" 와 extension=curl / openssl / mbstring / fileinfo 줄의 앞 ; 를 지운다.
+php -m   # curl, openssl, mbstring 이 보이면 됨
+```
 
 ## 정리
 
 | 구성 | 이미지/동영상(sd-webui) | 음악(music-gen, ACE-Step) | 음성(voice-gen, Supertonic) |
 |---|---|---|---|
-| 추천 | `lshqqytiger/stable-diffusion-webui-amdgpu` (ZLUDA 또는 `--use-directml`) | Windows ROCm 7.2 (`venv_rocm`) | CPU(ONNX) — 설정 불필요 |
-| VRAM 부족하거나 안 될 때 | `--use-directml` 로 다운그레이드 | CPU (매우 느림) | — |
-
-실제로 진행해보시고, 설치 중 에러 메시지를 그대로 알려주시면 그 카드/드라이버 조합에 맞게 같이 고쳐드리겠습니다.
+| 추천(검증됨) | 원본 A1111 + ROCm 7.2 (`sd-webui-rocm\` 파일 사용) | ROCm 7.2 (`venv_rocm`) | CPU(ONNX) — 설정 불필요 |
+| 안 될 때 | amdgpu 포크 + DirectML / ZLUDA (미검증) | CPU (매우 느림) | — |

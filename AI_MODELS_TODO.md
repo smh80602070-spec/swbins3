@@ -31,7 +31,7 @@ IT에 예외 요청할 때 도메인: `huggingface.co` + `*.cdn-lfs*.huggingface
 - 용량: 약 4GB
 - 받는 곳: https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/v1-5-pruned-emaonly.safetensors
 - 넣을 위치: `C:\swbins3\sd-webui\models\Stable-diffusion\`
-- 상태: ✅ 다운로드 완료 (이 PC 기준)
+- 상태: ✅ 다운로드 완료 (예전 NVIDIA PC, 그리고 2026-09-28 RX 7600 PC — 허브 경유 이미지 생성까지 확인)
 
 ## 2. 동영상 생성용 모션 모듈 (필수)
 
@@ -39,7 +39,9 @@ IT에 예외 요청할 때 도메인: `huggingface.co` + `*.cdn-lfs*.huggingface
 - 용량: 약 909MB
 - 받는 곳: https://huggingface.co/conrevo/AnimateDiff-A1111/resolve/main/motion_module/mm_sd15_v2.safetensors
 - 넣을 위치: `C:\swbins3\sd-webui\extensions\sd-webui-animatediff\model\`
-- 상태: ✅ 다운로드 완료 (이 PC 기준)
+- ⚠️ 파일 이름을 바꾸지 않는다 — 허브(`sdapi.php` 의 `AIHUB_MOTION_MODULE`)가 이 이름으로 요청한다. 2026-09-28 전까지 허브 기본값이
+  `mm_sd_v15_v2.safetensors` 로 틀려 있어서, 파일을 못 찾은 AnimateDiff 가 조용히 꺼지고 영상 대신 PNG 한 장이 왔다(지금은 고침).
+- 상태: ✅ 다운로드 완료 (예전 NVIDIA PC, 그리고 2026-09-28 RX 7600 PC — 허브 경유 영상 생성까지 확인)
 
 ## 3. 음악 생성 모델 — ACE-Step 1.5 (MIT)
 

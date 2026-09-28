@@ -26,6 +26,15 @@ from shap_e.util.notebooks import decode_latent_mesh
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 IDLE_UNLOAD_SECONDS = int(os.environ.get("IDLE_UNLOAD_SECONDS", "300"))
 
+# 결과물마다 붙여 주는 출처 기록(음악·음성 서버와 같은 모양). 게임에 넣을 때 어떤 모델·라이선스로 만들었는지 답할 수 있게 한다.
+PROVENANCE = {
+    "tool": "3d-gen",
+    "model": "openai/shap-e (text300M / image300M + transmitter)",
+    "license": "MIT",
+    "license_url": "https://github.com/openai/shap-e/blob/main/LICENSE",
+    "commercial_use": True,
+}
+
 app = Flask(__name__)
 _lock = threading.Lock()
 _state = {"xm": None, "text_model": None, "image_model": None, "diffusion": None, "last_used": 0.0}
@@ -130,7 +139,10 @@ def generate():
             glb_bytes = scene.export(file_type="glb")
 
         _state["last_used"] = time.time()
-        return jsonify(ok=True, model=base64.b64encode(glb_bytes).decode("ascii"))
+        provenance = dict(PROVENANCE, created_at=time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                          params={"prompt": prompt or None, "from_image": bool(image_b64),
+                                  "steps": steps, "guidance_scale": guidance_scale})
+        return jsonify(ok=True, model=base64.b64encode(glb_bytes).decode("ascii"), provenance=provenance)
     except torch.cuda.OutOfMemoryError:
         app.logger.exception("GPU 메모리 부족")
         return jsonify(ok=False, error="GPU 메모리가 부족합니다. 잠시 후 다시 시도해 주세요."), 500

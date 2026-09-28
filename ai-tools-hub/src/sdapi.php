@@ -32,6 +32,79 @@ function aihubMarkSdInUse(): void
     @unlink($logsDir . '\\sd-unloaded.flag');
 }
 
+/**
+ * 체크포인트(파일 이름, 확장자 제외) → 라이선스. 2026-09-28 에 라이선스 원문·배포처를 확인한 것만 적는다
+ * (COMMERCIAL_SWAP_TODO.md 의 표와 같이 고친다). 여기 없는 체크포인트로 만든 결과물은 commercial_use 가 null 로 나간다.
+ */
+const AIHUB_CHECKPOINT_LICENSES = [
+    'v1-5-pruned-emaonly' => [
+        'model' => 'stable-diffusion-v1-5/stable-diffusion-v1-5',
+        'license' => 'CreativeML OpenRAIL-M',
+        'license_url' => 'https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5',
+        'commercial_use' => true,
+        'note' => 'OpenRAIL-M Attachment A 의 금지 용도에는 쓸 수 없다.',
+    ],
+    'Counterfeit-V3.0_fp16' => [
+        'model' => 'gsdf/Counterfeit-V3.0',
+        'license' => 'CreativeML OpenRAIL-M (civitai 4468: 생성 이미지 판매 허용)',
+        'license_url' => 'https://huggingface.co/gsdf/Counterfeit-V3.0',
+        'commercial_use' => true,
+        'note' => '모델 파일 자체의 판매·재배포는 안 된다.',
+    ],
+    'rev_1.2.2-fp16' => [
+        'model' => 's6yx/ReV_Animated (1.2.2)',
+        'license' => 'CreativeML OpenRAIL-M (civitai 7371: 생성 이미지 판매 허용, 크레딧 표기 필요)',
+        'license_url' => 'https://huggingface.co/s6yx/ReV_Animated',
+        'commercial_use' => true,
+        'note' => '게임 크레딧에 "ReV Animated (s6yx)" 를 적는다.',
+    ],
+];
+
+const AIHUB_MOTION_MODULE_LICENSE = [
+    'model' => 'guoyww/AnimateDiff mm_sd15_v2 (conrevo/AnimateDiff-A1111 변환본)',
+    'license' => 'Apache-2.0',
+    'license_url' => 'https://huggingface.co/guoyww/animatediff',
+    'commercial_use' => true,
+];
+
+/**
+ * sd-webui 응답의 info(JSON 문자열)에서 실제로 쓰인 체크포인트·시드·프롬프트를 꺼내 출처 기록을 만든다.
+ * 음악·음성 서버의 provenance 와 같은 모양이라 허브 화면이 .license.json 으로 내려받게 한다.
+ */
+function aihubSdProvenance(array $data, string $tool, ?string $motionModule = null): array
+{
+    $info = json_decode((string)($data['info'] ?? ''), true);
+    $info = is_array($info) ? $info : [];
+    $checkpoint = (string)($info['sd_model_name'] ?? '');
+    $license = AIHUB_CHECKPOINT_LICENSES[$checkpoint] ?? [
+        'model' => $checkpoint !== '' ? $checkpoint : 'unknown',
+        'license' => 'unknown',
+        'license_url' => null,
+        'commercial_use' => null,
+        'note' => '라이선스를 확인하지 않은 체크포인트다 — 상업용으로 쓰기 전에 COMMERCIAL_SWAP_TODO.md 에 확인 결과를 적는다.',
+    ];
+
+    $provenance = ['tool' => $tool] + $license + [
+        'checkpoint' => $checkpoint,
+        'checkpoint_hash' => $info['sd_model_hash'] ?? null,
+        'created_at' => date('c'),
+        'params' => [
+            'prompt' => $info['prompt'] ?? null,
+            'negative_prompt' => $info['negative_prompt'] ?? null,
+            'seed' => $info['seed'] ?? null,
+            'steps' => $info['steps'] ?? null,
+            'sampler' => $info['sampler_name'] ?? null,
+            'cfg_scale' => $info['cfg_scale'] ?? null,
+            'width' => $info['width'] ?? null,
+            'height' => $info['height'] ?? null,
+        ],
+    ];
+    if ($motionModule !== null) {
+        $provenance['motion_module'] = ['file' => $motionModule] + AIHUB_MOTION_MODULE_LICENSE;
+    }
+    return $provenance;
+}
+
 function aihubContainsKorean(string $text): bool
 {
     return (bool)preg_match('/[\x{AC00}-\x{D7A3}]/u', $text);
@@ -142,10 +215,11 @@ function aihubGenerateImage(array $params): array
         return ['ok' => false, 'error' => '이미지가 생성되지 않았습니다. 체크포인트 모델이 로드되어 있는지 확인해 주세요.'];
     }
 
-    return ['ok' => true, 'images' => $data['images']];
+    return ['ok' => true, 'images' => $data['images'], 'provenance' => aihubSdProvenance($data, 'sd-webui')];
 }
 
-define('AIHUB_MOTION_MODULE', getenv('AIHUB_MOTION_MODULE') ?: 'mm_sd_v15_v2.safetensors');
+// AI_MODELS_TODO.md 2번이 받는 파일 이름과 같아야 한다. 틀리면 AnimateDiff 가 조용히 꺼져 영상 대신 PNG 한 장이 온다.
+define('AIHUB_MOTION_MODULE', getenv('AIHUB_MOTION_MODULE') ?: 'mm_sd15_v2.safetensors');
 
 /**
  * AnimateDiff 확장(extensions/sd-webui-animatediff)을 통한 짧은 영상 클립 생성.
@@ -230,7 +304,13 @@ function aihubGenerateVideo(array $params): array
         return ['ok' => false, 'error' => '영상이 생성되지 않았습니다. 체크포인트·모션 모듈이 준비되어 있는지 확인해 주세요.'];
     }
 
-    return ['ok' => true, 'video' => $data['images'][0]];
+    // MP4 는 4번째 바이트부터 'ftyp' 로 시작한다. 아니면 AnimateDiff 가 꺼진 채 이미지가 온 것이다.
+    if (substr((string)base64_decode(substr($data['images'][0], 0, 16)), 4, 4) !== 'ftyp') {
+        aihubLogError('영상 생성 응답이 MP4 가 아님 — 모션 모듈(' . AIHUB_MOTION_MODULE . ') 파일을 AnimateDiff 가 못 찾았을 가능성');
+        return ['ok' => false, 'error' => '영상 대신 이미지가 생성됐습니다. 모션 모듈 파일(' . AIHUB_MOTION_MODULE . ')이 sd-webui\extensions\sd-webui-animatediff\model 에 있는지 확인해 주세요.'];
+    }
+
+    return ['ok' => true, 'video' => $data['images'][0], 'provenance' => aihubSdProvenance($data, 'sd-webui + AnimateDiff', AIHUB_MOTION_MODULE)];
 }
 
 define('AIHUB_MUSIC_API_BASE', getenv('MUSIC_API_URL') ?: 'http://127.0.0.1:7862');
@@ -666,7 +746,7 @@ function aihubGenerate3D(array $params): array
         return ['ok' => false, 'error' => $detail !== '' ? $detail : "생성 실패 (HTTP {$status})"];
     }
 
-    return ['ok' => true, 'model' => $data['model']];
+    return ['ok' => true, 'model' => $data['model'], 'provenance' => $data['provenance'] ?? null];
 }
 
 define('AIHUB_CODE_MODEL', getenv('AIHUB_CODE_MODEL') ?: 'qwen2.5-coder:7b');

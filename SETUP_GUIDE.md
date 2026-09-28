@@ -161,10 +161,16 @@ venv\Scripts\python.exe -m pip install aider-chat
 
 ## 7. ai-tools-hub (웹 UI)
 
+PHP 8.x 가 필요합니다(`winget install --id PHP.PHP.8.3`). winget 판에는 `php.ini` 가 없어 `curl`·`openssl`·`mbstring`
+확장이 꺼져 있으니, 설치 폴더의 `php.ini-production` 을 `php.ini` 로 복사하고 `extension_dir = "ext"` 와 그 확장 줄의 `;` 를 지웁니다.
+
 ```powershell
 cd C:\swbins3\ai-tools-hub
+curl.exe -sS -o composer.phar https://getcomposer.org/download/latest-stable/composer.phar
 php composer.phar install
 ```
+
+AMD Radeon PC 는 1번(sd-webui)을 `SETUP_GUIDE_RADEON.md` 의 이미지·동영상 절로 대신합니다.
 
 ## 8. 한 번에 켜기
 
