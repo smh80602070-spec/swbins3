@@ -6,8 +6,7 @@ set PYTHON=%~dp0venv\Scripts\python.exe
 set GIT=
 set VENV_DIR=
 rem --medvram-sdxl: keep only the SDXL UNet in VRAM (8GB); without it SDXL 1024px spills into shared memory.
-rem --cors-allow-origins: lets the hub page read /sdapi/v1/progress directly (the PHP server is single-threaded).
-set COMMANDLINE_ARGS=--api --skip-python-version-check --medvram-sdxl --cors-allow-origins=http://127.0.0.1:8611
+set COMMANDLINE_ARGS=--api --skip-python-version-check --medvram-sdxl
 set STABLE_DIFFUSION_REPO=https://github.com/w-e-w/stablediffusion.git
 set REQS_FILE=%~dp0..\sd-webui-rocm\requirements_versions_py312.txt
 set TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1

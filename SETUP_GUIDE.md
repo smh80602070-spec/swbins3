@@ -1,179 +1,144 @@
-# 새 PC에서 로컬 AI 생성 환경 다시 만들기
+# 로컬 AI 생성 도구 — 설치·설정 안내 (2026-10-07 리뉴얼)
 
-git에는 `ai-tools-hub`, `music-gen/server.py`, `voice-gen/server.py`, `start-all.bat` 등 코드만 있고,
-`sd-webui/`, `music-gen/venv/`, `voice-gen/venv/`, 모델 파일은 용량 때문에 `.gitignore`로 빠져 있습니다.
-새 PC에서는 이 문서대로 그 무거운 부분을 다시 만들어야 합니다.
+이 저장소의 AI 도구는 **saga(`C:\swbins`) 자체툴**이 배치로 부르는 백엔드다. 사람용 웹 허브·일괄 켜기·3D·동영상·코딩 에이전트는
+2026-10-07 에 걷어냈다(안 쓰거나 이 PC 에서 못 돎). 남은 것:
 
-## 0. 사전 준비
+| 폴더 | 하는 일 | 모델(라이선스) | 부르는 쪽(`C:\swbins`) |
+|---|---|---|---|
+| `comfyui/` (+ `comfyui-saga/`) | 그림 — ComfyUI API, 포트 8188 | Z-Image-Turbo(Apache-2.0) · Illustrious XL v2.0 · Animagine XL 4.0 Opt(OpenRAIL) | `tools/ai-art/gen.py`, `start_sd.ps1`/`stop_sd.ps1`, 판정기 `tools/asset-audit/judge` |
+| `music-gen/` | 배경음 — ACE-Step 1.5 | MIT | `music-gen/batch_saga.py`(K 티켓이 직접 실행) |
+| `voice-gen/` | 음성 — Supertonic 3(고정 10 목소리) + Qwen3-TTS 시험 | OpenRAIL-M / Apache-2.0 | `voice-gen/batch_saga.py` · `qwen3_trial.py` |
+| `sfx-gen/` | 효과음 — MOSS-SoundEffect v2 시험 | Apache-2.0 | `sfx-gen/moss_trial.py` |
+| `judge-models/` · `populate-clip-cache.py` | 판정기 미적 점수 가중치 · CLIP 토크나이저 오프라인 등록 | — | `tools/asset-audit/judge/judge.py` |
 
-- Python 3.10, Git 설치되어 있어야 함
-- NVIDIA GPU + 드라이버 (VRAM 6GB 이상 권장)
-- Ollama 설치: https://ollama.com (문서·코드 생성용, 이 저장소에 포함 안 됨)
-- 회사 네트워크라면 `huggingface.co`, `*.cdn-lfs*.huggingface.co`, `registry.ollama.ai`, `ollama.com` 방화벽 예외 필요 (전에 겪은 문제: "전문/특화 AI 기타" 정책으로 차단됨)
+라이선스 판정·금지 목록은 `COMMERCIAL_SWAP_TODO.md`. 화면 녹화 도구(`rec.ps1`·`web/`)는 `README.md`(별개).
 
-## 1. sd-webui (이미지)
+## 0. 이 PC
+
+- Windows 11 · **AMD Radeon RX 7600 (8GB)** · RAM 32GB · Python 3.12(`py -3.12`; `python` 은 스토어 껍데기라 쓰지 않는다).
+- GPU 는 **AMD ROCm 7.2 for Windows** PyTorch 휠(`torch 2.9.1+rocmsdk20260116`, cp312 전용). 모든 venv 가 같은 휠 셋을 쓴다:
+
+```powershell
+# ROCm 휠 셋 — 각 venv 에 이 순서로(약 4GB, 불안정한 망에서는 --retries 10 --timeout 60)
+<venv>\Scripts\python.exe -m pip install `
+  https://repo.radeon.com/rocm/windows/rocm-rel-7.2/rocm_sdk_core-7.2.0.dev0-py3-none-win_amd64.whl `
+  https://repo.radeon.com/rocm/windows/rocm-rel-7.2/rocm_sdk_devel-7.2.0.dev0-py3-none-win_amd64.whl `
+  https://repo.radeon.com/rocm/windows/rocm-rel-7.2/rocm_sdk_libraries_custom-7.2.0.dev0-py3-none-win_amd64.whl `
+  https://repo.radeon.com/rocm/windows/rocm-rel-7.2/rocm-7.2.0.dev0.tar.gz
+<venv>\Scripts\python.exe -m pip install `
+  https://repo.radeon.com/rocm/windows/rocm-rel-7.2/torch-2.9.1+rocmsdk20260116-cp312-cp312-win_amd64.whl `
+  https://repo.radeon.com/rocm/windows/rocm-rel-7.2/torchvision-0.24.1+rocmsdk20260116-cp312-cp312-win_amd64.whl `
+  https://repo.radeon.com/rocm/windows/rocm-rel-7.2/torchaudio-2.9.1+rocmsdk20260116-cp312-cp312-win_amd64.whl
+<venv>\Scripts\python.exe -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"   # True AMD Radeon RX 7600
+```
+
+- 이 빌드의 함정(전부 코드가 메워 둠): `torch.distributed` 가 없다(ACE-Step 은 `acestep_launch.py` 가 대체, 다른 모델은 `sdpa` 어텐션) ·
+  MIOpen 합성곱이 매우 느리다(ComfyUI 는 RDNA3 에서 스스로 끈다; ESRGAN 업스케일만 `COMFYUI_ENABLE_MIOPEN=1` 로 켜서 돌린다) ·
+  fp8 연산이 없어 fp8 가중치는 VRAM 만 아낀다(**GGUF Q6/Q8 이 안전**) · bf16 VAE 가 느리다(`--fp32-vae`).
+- NVIDIA PC 면 위 휠 대신 `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128` 이고 나머지는 같다.
+- 8GB 라 **한 번에 하나만** 켠다(그림 ↔ 음악 ↔ 음성 GPU 판). Unity·Blender 배치와도 같이 돌리지 않는다(사용자 09-29 "PC 가 멈추지 않게").
+
+## 1. 그림 — ComfyUI (A1111 에서 2026-10-07 이사)
+
+왜 바꿨나: A1111 1.10.1 은 2025-02 이후 멈췄고 SDXL 이후 모델(Z-Image·FLUX.2 klein)을 못 돌린다. ComfyUI 는 2026-01 부터
+Windows ROCm 공식 지원, 새 모델 네이티브, 메모리 관리가 나아 8GB 에서 1024² 가 공유 메모리로 안 넘친다. 툴 라이선스(GPL-3)는 결과물과 무관.
 
 ```powershell
 cd C:\swbins3
-git clone --depth 1 https://github.com/AUTOMATIC1111/stable-diffusion-webui.git sd-webui
+git clone --depth 1 https://github.com/Comfy-Org/ComfyUI.git comfyui
+git clone --depth 1 https://github.com/city96/ComfyUI-GGUF.git comfyui\custom_nodes\ComfyUI-GGUF   # Apache-2.0, GGUF 로더
+copy comfyui-saga\saga_seamless.py comfyui\custom_nodes\                                          # 이음매 타일 노드(K-0020)
+copy comfyui-saga\gguf_ops_patched.py comfyui\custom_nodes\ComfyUI-GGUF\ops.py                     # 10-07: GGUF main(2026-01)이 ComfyUI 의 융합 활성화 kwargs 를 몰라 Linear 만 손봄(CRLF 주의)
+cd comfyui
+py -3.12 -m venv venv
+venv\Scripts\python.exe -m pip install --upgrade pip
+# → 0번의 ROCm 휠 셋
+venv\Scripts\python.exe -m pip install -r requirements.txt gguf
 ```
 
-`sd-webui\webui-user.bat`을 열어 이렇게 설정:
+모델(`comfyui\models\`, 전부 상업 허용 — 판정은 `COMMERCIAL_SWAP_TODO.md`):
 
-```bat
-set COMMANDLINE_ARGS=--api --cors-allow-origins=http://127.0.0.1:8611 --medvram-sdxl
-set STABLE_DIFFUSION_REPO=https://github.com/w-e-w/stablediffusion.git
-```
+| 파일 | 어디서 | 용량 | 용도 |
+|---|---|---|---|
+| `unet\z-image-turbo-Q6_K.gguf` | `unsloth/Z-Image-Turbo-GGUF` | 5.9GB | **주력**. 범용·사실풍·글자. 8단계·CFG 1, 문장형 프롬프트 |
+| `text_encoders\Qwen3-4B-Q8_0.gguf` | `Qwen/Qwen3-4B-GGUF` | 4.3GB | Z-Image 텍스트 인코더 |
+| `vae\ae.safetensors` | `Comfy-Org/z_image_turbo` (split_files/vae) | 0.3GB | Z-Image VAE |
+| `checkpoints\Illustrious-XL-v2.0.safetensors` | `OnomaAIResearch/Illustrious-XL-v2.0` | 6.6GB | 애니·태그형·LoRA. **이음매 타일은 이것으로**(DiT 는 안 됨) |
+| `checkpoints\animagine-xl-4.0-opt.safetensors` | `cagliostrolab/animagine-xl-4.0` | 6.6GB | 애니(기존 배치 86개가 이 모델. 깔끔한 현대 애니) |
+| `vae\sdxl-vae-fp16-fix.safetensors` | `madebyollin/sdxl-vae-fp16-fix` | 0.3GB | SDXL 둘의 VAE(fp16 NaN 보정) |
 
-(`--medvram-sdxl` 은 SDXL 일 때 UNet 만 VRAM 에 둔다 — VRAM 8GB 이하에서 SDXL 1024px 이 넘치지 않게. 12GB 이상이면 빼도 됨)
+둘째 단계 후보(아직 안 받음): FLUX.2 klein 4B(Apache-2.0, 생성+편집+다중 참조 → 인물 일관성, GGUF Q6 ≈4GB) · BiRefNet(MIT, 배경 제거) ·
+Real-ESRGAN x4plus_anime_6B(BSD-3, 업스케일). **받지 말 것**: NoobAI(NC) · Illustrious v3.x(라이선스 미확인) · Qwen-Image-2.1(연구용) ·
+FLUX dev/Kontext dev/klein 9B(NC) · RMBG-2.0 · 4x-UltraSharp(NC).
 
-(원래 `Stability-AI/stablediffusion` 저장소가 삭제되어서 미러로 바꿔야 함 — 안 하면 "Repository not found" 에러)
-(`--cors-allow-origins` 는 허브 화면이 sd-webui 의 진행률을 직접 읽게 한다 — 허브의 PHP 서버는 요청을 하나씩만 처리해서 생성 중에는 진행률 요청에 답하지 못함)
+켜기·끄기·실행 플래그는 `C:\swbins\tools\ai-art\start_sd.ps1`(숨김 창·낮은 우선순위·PID 파일·RAM 8GB 미만이면 거부)이 정본:
+`--use-pytorch-cross-attention --disable-dynamic-vram --lowvram --disable-pinned-memory --fp32-vae`, 환경 `TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1`.
+왜 이 조합인가(10-07~08 실측 네 번): 기본(동적 VRAM)은 텍스트 인코더(4.4GB)와 DiT(5.7GB)를 프롬프트마다 갈아 끼워 장당 2~5분, 두 계열이 RAM 에 같이 남으면 페이지 파일로 밀려 48s/it.
+고전 관리 + `--lowvram` 이면 인코더가 CPU 에 남고 DiT 만 GPU 에 상주. `--fp16-vae` 는 Z-Image 가 검은 그림(NaN)·21s/it 로 깨져 fp32 유지. `gen.py` 는 VAE 를 타일 디코드(512)해 UNet 이 쫓겨나지 않게 하고 배치 시작마다 `/free`.
+손으로 켤 땐 `venv\Scripts\python.exe main.py --listen 127.0.0.1 --port 8188 --disable-auto-launch <같은 플래그>`. 측정값은 6번.
 
-AnimateDiff(동영상) 확장은 **설치하지 않습니다** — 코드 라이선스가 CC BY-NC-SA 4.0(비상업)이라 게임 에셋용으로 쓸 수 없습니다.
-예전에 설치했다면 `sd-webui\extensions\sd-webui-animatediff\` 를 지웁니다. 동영상은 점검 중(`COMMERCIAL_SWAP_TODO.md` 순서 7).
+## 2. 음악 — ACE-Step 1.5 (`music-gen/`)
 
-한국어 로케일(선택):
-
-```powershell
-cd sd-webui\extensions
-git clone --depth 1 https://github.com/AUTOMATIC1111/stable-diffusion-webui-old-localizations.git
-```
-
-```powershell
-cd C:\swbins3\sd-webui
-webui-user.bat
-```
-
-최초 실행 시 venv 생성 + torch 등 설치가 진행됩니다. **아래 에러가 나면**:
-
-- `Couldn't install clip` / `ModuleNotFoundError: No module named 'pkg_resources'`
-  ```powershell
-  venv\Scripts\python.exe -m pip install --upgrade "setuptools<70" wheel
-  venv\Scripts\python.exe -m pip install --no-build-isolation "https://github.com/openai/CLIP/archive/d50d76daa670286dd6cacf3bcd80b5e4823fc8e1.zip"
-  ```
-  그 다음 `webui-user.bat` 다시 실행.
-
-- 한국어 로케일 적용: 서버 뜬 뒤
-  ```powershell
-  curl.exe -X POST -H "Content-Type: application/json" -d "{\"localization\":\"ko_KR\"}" http://127.0.0.1:7860/sdapi/v1/options
-  ```
-  (또는 웹 UI Settings → User Interface → Localization 에서 `ko_KR` 선택)
-
-모델 파일은 `AI_MODELS_TODO.md`의 1·2번 참고.
-
-## 2. music-gen (음악 — ACE-Step 1.5, MIT 라이선스)
-
-`music-gen/server.py`는 ACE-Step 1.5의 REST API 서버를 감싸는 어댑터입니다(포트 7862는 그대로).
-첫 요청 때 ACE-Step API 서버(포트 8001)를 숨김 프로세스로 띄우고, 5분 동안 요청이 없으면 끕니다.
-어댑터 자체는 flask만 필요하고, ACE-Step은 `music-gen\ACE-Step-1.5\` 에 따로 설치합니다.
+`batch_saga.py` 가 `server.py` 를 import 해 ACE-Step API(8001)를 직접 띄우고 끈다(flask 서버 7862 는 안 띄움). 2026-09-28 이 PC 에서 설치·확인(커밋 `ca1e85f`).
 
 ```powershell
 cd C:\swbins3\music-gen
 py -3.12 -m venv venv
-venv\Scripts\python.exe -m pip install -r requirements.txt
+venv\Scripts\python.exe -m pip install -r requirements.txt           # flask·imageio-ffmpeg
 git clone https://github.com/ace-step/ACE-Step-1.5.git ACE-Step-1.5
 cd ACE-Step-1.5
+py -3.12 -m venv venv_rocm
+# → 0번의 ROCm 휠 셋 (주소는 ACE-Step 의 requirements-rocm.txt 머리말과 같아야 한다)
+venv_rocm\Scripts\python.exe -m pip install -r requirements-rocm.txt
+venv_rocm\Scripts\python.exe -m acestep.model_downloader                                     # turbo DiT·VAE·Qwen3-Embedding(1.7B LM 도 같이 오면 지운다)
+venv_rocm\Scripts\python.exe -m acestep.model_downloader --model acestep-5Hz-lm-0.6B --skip-main
 ```
 
-**NVIDIA(CUDA) PC** — [uv](https://docs.astral.sh/uv/) 로 설치합니다(`.venv` 가 생기고, 어댑터가 자동으로 찾습니다).
+- 조합은 **2B turbo + LM 0.6B**(ACE-Step README 의 6–8GB 권장). 1.7B LM 은 12GB+ 전용이라 받아도 못 쓴다(10-07 삭제). XL(4B)도 12GB+.
+- `server.py` 가 넣는 값: `HSA_OVERRIDE_GFX_VERSION=11.0.2`(RX 7600; 7900 계열 11.0.0, 7800/7700 계열 11.0.1), `ACESTEP_ROCM_DTYPE=bfloat16`
+  (float32 기본값은 8GB 를 넘겨 30초 곡이 107초 → bf16 18초), `torch.distributed` 대체는 `acestep_launch.py`.
+- 측정(09-28): 첫 요청 2분 곡 73초(기동 40초 포함), 이후 30초 곡 18초. 5분 유휴면 프로세스를 끝내 VRAM 반환.
+- 루프: 모델이 끊김 없는 루프를 만들진 않는다 — 30~60초 기악을 뽑고 끝 2초 크로스페이드(K 티켓 쪽 후처리).
 
-```powershell
-uv sync
-uv run acestep-download                                                # 기본 모델(약 10GB: DiT turbo, VAE, 텍스트 인코더, LM 1.7B)
-uv run acestep-download --model acestep-5Hz-lm-0.6B --skip-main       # VRAM 8GB 이하용 작은 LM
-```
+## 3. 음성 — Supertonic 3 + Qwen3-TTS 시험 (`voice-gen/`)
 
-**AMD Radeon PC** — `SETUP_GUIDE_RADEON.md` 의 "음악(ACE-Step 1.5)" 절을 따릅니다(`venv_rocm`).
+- **Supertonic 3**(`supertonic==1.3.1`, ONNX CPU, 목소리 M1~M5·F1~F5, ko·en·ja): `py -3.12 -m venv venv && venv\Scripts\python.exe -m pip install -r requirements.txt`.
+  모델 385MB 는 첫 실행 때 `models\supertonic3\` 로 받는다. **Supertone 사가 2026-07 청산·저장소 아카이브** — 가중치(OpenRAIL-M)는 계속 쓸 수 있으나
+  목소리 추가·갱신은 영원히 없다. `models\supertonic3\` 를 지우지 말 것(HF 조직이 사라질 수 있어 로컬 사본이 원본이다; 미러 `jinhwan000/supertonic-3-mirror`).
+- **Qwen3-TTS 1.7B VoiceDesign**(Apache-2.0, 한국어, 글로 목소리 설계·감정 지시) — 보완 후보. 별도 venv:
+  `py -3.12 -m venv venv_qwen` → 0번 ROCm 휠 셋 → `venv_qwen\Scripts\python.exe -m pip install -U qwen-tts soundfile` →
+  `venv_qwen\Scripts\python.exe qwen3_trial.py`(문장 10 × 목소리 3 → `out\qwen3-<날짜>\sheet.md`). ROCm 에서 막히면 `--device cpu` 또는 0.6B.
+  **한국어 자연스러움의 독립 청취 비교는 세상에 없다** — 같은 10줄을 Supertonic·Qwen3 로 뽑아 사용자가 듣고 고른다(K 티켓).
 
-- 어댑터는 `venv_rocm` → `.venv` → `venv` 순서로 ACE-Step 의 python.exe 를 찾습니다. 다른 곳에 설치했으면
-  `ACESTEP_DIR`(설치 폴더) 또는 `ACESTEP_PYTHON`(python.exe 경로) 환경 변수로 알려 줍니다.
-- 기본값: DiT `acestep-v15-turbo` + LM `acestep-5Hz-lm-0.6B`, CPU 오프로드 켬(VRAM 8GB 권장 조합).
-  바꾸려면 `ACESTEP_CONFIG_PATH`·`ACESTEP_LM_MODEL_PATH` 환경 변수를 `run.bat` 에 넣습니다.
-- ACE-Step 로그는 `logscestep-api.log` 에 쌓입니다. 음악 생성이 실패하면 먼저 여기를 봅니다.
-- 웹 UI 는 가사 없는 연주곡(`[Instrumental]`)을 10~240초로 만듭니다.
+## 4. 효과음 — MOSS-SoundEffect v2 시험 (`sfx-gen/`)
 
-## 3. voice-gen (음성 — Supertonic 3, OpenRAIL-M)
+Apache-2.0 · 1.3B DiT · 48kHz · ≤30초 · 프롬프트 en/zh. 상업 허용 효과음 모델이 없던 빈칸(절차 생성만 있었음).
+`py -3.12 -m venv venv` → 0번 ROCm 휠 셋 → `git clone https://github.com/OpenMOSS/MOSS-TTS.git` →
+`venv\Scripts\python.exe -m pip install -e MOSS-TTS\moss_soundeffect_v2`(cu128 extra 는 빼고) → `venv\Scripts\python.exe moss_trial.py`.
+Triton 이 없으니 `TORCHDYNAMO_DISABLE=1`(스크립트가 켬). 2순위는 Stable Audio 3 Small SFX(연매출 $1M 상한 조건).
 
-ONNX Runtime 으로 CPU 에서 도는 가벼운 모델이라 그래픽카드 종류와 상관없이 같은 방법으로 설치합니다.
+## 5. 판정기 (`judge-models/`, `populate-clip-cache.py`)
 
-```powershell
-cd C:\swbins3\voice-gen
-py -3.12 -m venv venv
-venv\Scripts\python.exe -m pip install -r requirements.txt
-```
+`C:\swbins\tools\asset-audit\judge\judge.sh` 가 `comfyui\venv` 의 파이썬(토치·transformers)으로 CLIP ViT-L/14 + LAION 미적 예측기
+(`judge-models\sac+logos+ava1-l14-linearMSE.pth`)를 돌린다. CLIP 모델은 HF 캐시(`~\.cache\huggingface\hub\models--openai--clip-vit-large-patch14`)에서
+`local_files_only` 로 읽는다 — 회사망(SSL 검사)에서 못 받으면 `populate-clip-cache.py` 로 다른 망에서 받은 파일을 캐시에 등록한다.
 
-회사망에서 `SSL: CERTIFICATE_VERIFY_FAILED` 가 나면 `venv\Scripts\python.exe -m pip install pip-system-certs` 를 먼저
-설치합니다(Windows 인증서 저장소를 쓰도록 패치).
+## 6. 측정 결과 (2026-10-07, ComfyUI 이사 직후, RX 7600 8GB)
 
-모델(`Supertone/supertonic-3`, 약 385MB)은 첫 요청 때 `voice-gen\models\supertonic3\` 로 자동 다운로드됩니다.
-목소리는 정해진 10종(여성 F1~F5, 남성 M1~M5)에서 고르며, 참조 음성으로 목소리를 흉내 내는 기능은 없습니다.
-언어는 한국어·영어·일본어를 웹 UI 에서 고를 수 있습니다.
+`gen.py` 가 찍는 `seconds`(요청 → 파일). 샘플링 자체는 A1111 때보다 빠르고(2.4 vs 2.0 it/s) 1024² 가 공유 메모리로 안 넘치지만, 장당 시간은 모델 로딩·CPU 인코딩이 지배한다.
+**다음 최적화 후보**(별 티켓): Z-Image 인코더를 GGUF Q4(2.5GB)로 바꿔 GPU 에 같이 올리기 · 인코더 결과를 배치 단위로 묶어 한 번만 인코딩 · 기동 5~6분 원인(ROCm torch import·comfy_kitchen 탐지) · TeaCache/FBCache 노드 · Illustrious 에 Hyper/LCM LoRA(단계 8).
 
-## 4. 3d-gen (3D 에셋)
 
-```powershell
-cd C:\swbins3
-mkdir 3d-gen
-cd 3d-gen
-python -m venv venv
-venv\Scripts\python.exe -m pip install --upgrade pip
-venv\Scripts\python.exe -m pip install flask trimesh scikit-image scipy matplotlib blobfile humanize fire tqdm Pillow requests pyyaml "clip @ git+https://github.com/openai/CLIP.git" "shap-e @ git+https://github.com/openai/shap-e.git"
-venv\Scripts\python.exe -m pip install "torch==2.5.1" --index-url https://download.pytorch.org/whl/cu121
-venv\Scripts\python.exe -m pip install "torchvision==0.20.1" --index-url https://download.pytorch.org/whl/cu121
-```
+| 모델 | 크기·단계 | 첫 장(로딩 포함) | 이후 장당 |
+|---|---|---|---|
+| Z-Image-Turbo Q6_K | 1024×1024 · 8 | 184초 | 샘플링 40초(5 s/it) + 인코더(CPU, GGUF Q8 4B) 1~2분 — **프롬프트가 바뀔 때마다** |
+| Z-Image-Turbo Q6_K | 768×768 · 8 | 101초 | 샘플링 19초(2.3 s/it) + 인코더 1~2분 |
+| Illustrious XL v2.0 | 832×1216 · 28 Euler a | 120~150초 | 약 86초(샘플링 17초, 1.65 it/s) |
+| Illustrious XL v2.0 타일 | 768×768 · 28 | 144초(배치 첫 장, 디스크 로딩) | 약 64초(샘플링 12초, 2.4 it/s) |
+| 참고: A1111 시절 SDXL | 768×1024 · 28 | 68초 | 40초(1024² 는 5분+, 공유 메모리로 넘침) |
 
-⚠️ `shap-e`/`clip`을 먼저 설치하면 의존성 해석 과정에서 torch가 CPU 전용 최신 버전으로 덮어써집니다.
-**반드시 torch·torchvision을 shap-e보다 나중에, cu121 인덱스로 다시 설치**해야 GPU가 잡힙니다(`torch.cuda.is_available()`로 확인).
+## 7. 걷어낸 것 (2026-10-07)
 
-`server.py`, `run.bat`은 git에 이미 있습니다(clone하면 옴). 모델(`transmitter`, `text300M`, `image300M`)은 첫 요청 때
-`openaipublic.azureedge.net`에서 자동 다운로드됩니다 — huggingface.co와 별개 도메인이라 방화벽 예외를 따로 받아야
-할 수 있습니다(`AI_MODELS_TODO.md` 7번 참고).
-
-## 5. Ollama (문서·코드, 한국어→영어 프롬프트 번역)
-
-```powershell
-ollama pull qwen2.5:7b
-ollama pull qwen2.5-coder:7b
-```
-
-`qwen2.5:7b`는 문서 생성뿐 아니라 이미지·동영상·웹툰·3D 탭의 한국어 프롬프트를 영어로 번역하는 데도 쓰입니다.
-
-## 6. aider (로컬 코딩 에이전트, 선택)
-
-파일을 직접 읽고 쓰고 명령을 실행하며 반복 수정하는 "클로드 코드 같은" 로컬 에이전트가 필요하면 설치합니다
-(웹 UI의 "코드/앱" 탭은 텍스트 한 덩어리만 주는 단발성 생성이라 이거랑 다릅니다).
-
-```powershell
-cd C:\swbins3
-mkdir aider
-cd aider
-python -m venv venv
-venv\Scripts\python.exe -m pip install --upgrade pip
-venv\Scripts\python.exe -m pip install aider-chat
-```
-
-`dev-agent.bat`, `README.md`는 git에 이미 있습니다(clone하면 옴). 5번의 `qwen2.5-coder:7b`를 그대로 재사용하므로
-추가로 받을 모델은 없습니다. 사용법은 `aider/README.md` 참고 — 작업할 프로젝트 폴더에서 `dev-agent.bat`을 직접 실행합니다
-(웹 UI에 연동하지 않음 — LLM이 파일/명령을 다루는 걸 브라우저 버튼으로 트리거하는 건 안전하지 않아서 터미널 전용으로 둠).
-
-## 7. ai-tools-hub (웹 UI)
-
-PHP 8.x 가 필요합니다(`winget install --id PHP.PHP.8.3`). winget 판에는 `php.ini` 가 없어 `curl`·`openssl`·`mbstring`
-확장이 꺼져 있으니, 설치 폴더의 `php.ini-production` 을 `php.ini` 로 복사하고 `extension_dir = "ext"` 와 그 확장 줄의 `;` 를 지웁니다.
-
-```powershell
-cd C:\swbins3\ai-tools-hub
-curl.exe -sS -o composer.phar https://getcomposer.org/download/latest-stable/composer.phar
-php composer.phar install
-```
-
-AMD Radeon PC 는 1번(sd-webui)을 `SETUP_GUIDE_RADEON.md` 의 이미지·동영상 절로 대신합니다.
-
-## 8. 한 번에 켜기
-
-```powershell
-C:\swbins3\start-all.bat
-```
-
-`http://127.0.0.1:8611/` → "서버 상태" 탭에서 5개 다 켜졌는지 확인.
+`video-gen`(AnimateDiff, 뭉개짐·VFX "안 된다") · `3d-gen`(Shap-E, 설치된 적 없음) · `aider`+Ollama(미설치) · `ai-tools-hub`+`start/stop-all`+워치독(09-28 이후 안 켬) ·
+`sd-webui`(A1111) · NoobAI(NC) · SD1.5·SDXL base(상위 모델에 밀림) · ACE-Step 1.7B LM(12GB+ 전용) · HF 캐시의 AnimateDiff·SD1.5·CLIP bigG.
+되살리지 않는다(SAGA-ARCH §4.5: 인간형 몸·모션·VFX 는 재시도 금지).

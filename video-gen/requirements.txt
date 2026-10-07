@@ -1,7 +1,0 @@
-flask
-diffusers==0.35.2
-transformers
-accelerate
-safetensors
-imageio
-imageio-ffmpeg

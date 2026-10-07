@@ -2,29 +2,26 @@
 out/
 rec-state.json
 *.log
-sd-webui/
-music-gen/venv/
-music-gen/__pycache__/
-voice-gen/venv/
-voice-gen/__pycache__/
-voice-gen/reference.wav
-voice-gen/_last_output.wav
-3d-gen/venv/
-3d-gen/__pycache__/
-3d-gen/models/
-music-gen/models/
-music-gen/ACE-Step-1.5/
-voice-gen/models/
-ollama/
-aider/venv/
-aider/__pycache__/
-.aider*
-bash.exe.stackdump
 logs/
 __pycache__/
+bash.exe.stackdump
 
-video-gen/venv/
-video-gen/models/
+# ComfyUI 는 git clone(자체 .git) + venv + 모델이라 통째로 뺀다. 우리 노드 원본은 comfyui-saga/ 에 둔다
+comfyui/
+# 옛 A1111(sd-webui) 자리 — 남아 있으면 지운다
+sd-webui/
+
+music-gen/venv/
+music-gen/models/
+music-gen/ACE-Step-1.5/
+voice-gen/venv/
+voice-gen/models/
+voice-gen/out/
+voice-gen/reference.wav
+voice-gen/_last_output.wav
+voice-gen/qwen3-tts/
+sfx-gen/venv/
+sfx-gen/models/
 
 # Serena(코드 탐색 도구)가 만드는 로컬 설정
 .serena/

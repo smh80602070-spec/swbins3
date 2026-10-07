@@ -5,6 +5,11 @@
 
 사방넷 업무용 대시보드(`swbins2`)와는 무관한 범용 도구라 2026-09-17 에 이 저장소(`swbins3`)로 분리했습니다.
 
+## 같은 저장소의 AI 생성 도구
+
+화면 녹화와는 별개로, saga(`C:\swbins`) 자체툴이 배치로 부르는 로컬 AI 백엔드(그림 ComfyUI · 음악 ACE-Step · 음성 Supertonic/Qwen3-TTS · 효과음 MOSS)가
+같이 산다. 설치·설정은 `SETUP_GUIDE.md`, 라이선스 장부는 `COMMERCIAL_SWAP_TODO.md`. 2026-10-07 에 허브·3D·동영상·코딩 에이전트를 걷어냈다.
+
 ## 빠른 사용법
 
 ```powershell
