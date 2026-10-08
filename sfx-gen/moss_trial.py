@@ -58,10 +58,19 @@ def main():
     ap.add_argument('--steps', type=int, default=50)
     ap.add_argument('--model', default='OpenMOSS-Team/MOSS-SoundEffect-v2.0')
     ap.add_argument('--only', type=int, default=0)
+    ap.add_argument('--plan', default='', help='saga K-0085: tools/asset-forge/data/sfx_moss_plan.json — id → 프롬프트(길이는 --durations 의 duration_ms)')
+    ap.add_argument('--durations', default='', help='saga saga-assets/sfx/sfx_list.json')
     ap.add_argument('--window', type=int, default=10, help='만들 창(초) — 30 이면 원래 방식(한 개 18분), 10 = 약 4분')
     a = ap.parse_args()
     from moss_soundeffect_v2 import MossSoundEffectPipeline
     out = os.path.join(HERE, 'out', 'moss-' + datetime.date.today().strftime('%Y%m%d'))
+    todo = SFX[:a.only] if a.only else SFX
+    if a.plan:                                                   # K-0085 — 이름 그대로 갈아 끼울 후보, 이어하기
+        import json
+        dur = {i['id'].replace('sfx_', ''): i['duration_ms'] for i in json.load(open(a.durations, encoding='utf-8'))['items']} if a.durations else {}
+        out = os.path.join(HERE, 'out', 'saga-sfx')
+        todo = [(k, v, max(0.4, dur.get(k, 1000) / 1000 + 0.1)) for k, v in json.load(open(a.plan, encoding='utf-8'))['items'].items()
+                if not os.path.exists(os.path.join(out, k + '.wav'))]
     os.makedirs(out, exist_ok=True)
     t0 = time.time()
     pipe = MossSoundEffectPipeline.from_pretrained(a.model, torch_dtype=torch.bfloat16 if a.device != 'cpu' else torch.float32, device=a.device)
@@ -70,7 +79,7 @@ def main():
     print(f'model loaded {time.time() - t0:.0f}s')
     rows = ['# MOSS-SoundEffect v2.0 효과음 시험 ' + datetime.date.today().isoformat(), '', f'device {a.device} · steps {a.steps} · 로딩 {time.time() - t0:.0f}s', '',
             '| id | 프롬프트 | 초 | 생성 시간 |', '|---|---|---|---|']
-    for sid, prompt, sec in (SFX[:a.only] if a.only else SFX):
+    for sid, prompt, sec in todo:
         t1 = time.time()
         win = a.window                                   # 기본 파이프라인은 늘 30초 창을 만들고 앞을 자른다(30초 = 한 개 18분). 10-08 실측: 창 2~3초는 깨지고(내내 최대 음량),
         audio = pipe(prompt=prompt, seconds=win, num_inference_steps=a.steps, cfg_scale=4.0, max_inference_seconds=win)   # 5초는 소리가 창 뒤쪽에 놓여 앞 2초가 빔 → 창 전체를 만들고
