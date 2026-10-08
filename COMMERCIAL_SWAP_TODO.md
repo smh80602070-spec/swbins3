@@ -13,7 +13,9 @@
 | 그림(VAE) | `madebyollin/sdxl-vae-fp16-fix` | MIT | 2026-09-28 | SDXL fp16 NaN 보정 |
 | 음악 | **ACE-Step 1.5** (`acestep-v15-turbo` + `acestep-5Hz-lm-0.6B`) | MIT(코드·가중치, 저장소 LICENSE 파일) | 2026-09-28 / 10-07 재확인 | 2026-10-07 현재 ACE-Step 2 없음. XL(4B)·1.7B LM 은 12GB+ |
 | 음성 | **Supertonic 3** (Supertone) | 가중치 BigScience Open RAIL-M(사용 제한 조항 = 딥페이크·동의 없는 흉내 등, 게임엔 무관), 코드 MIT | 2026-09-28 / 10-07 | **회사 청산(2026-07)·저장소 아카이브** — 로컬 사본이 원본. 배포물 고지에 사용 제한 조항 한 줄 |
-| 음성(시험) | **Qwen3-TTS 1.7B VoiceDesign / 0.6B** | Apache-2.0(코드·가중치) | 2026-10-07 | 한국어, 글로 목소리 설계·감정 지시. ROCm Win 실측 전 |
+| 음성(시험) | **Qwen3-TTS 1.7B VoiceDesign / 0.6B** | Apache-2.0(코드·가중치) | 2026-10-07 | 한국어, 글로 목소리 설계·감정 지시. 10-08 ROCm Win 실측: 한 줄 10~18초(MIOpen 끔), 받아쓰기 오류율 4~6% |
+| 판정(효과음↔설명) | **CLAP** (`laion/larger_clap_general`) | Apache-2.0 | 2026-10-08 | 생성 효과음이 설명과 맞는지 점검만(`sfx-gen/clap_check.py`), 게임에 안 들어감 |
+| 판정(음성 받아쓰기) | **Whisper large-v3-turbo** (`openai/whisper-large-v3-turbo`) | MIT | 2026-10-08 | 생성 음성의 또렷함 점검만(`voice-gen/asr_check.py`), 게임에 안 들어감 |
 | 효과음(시험) | **MOSS-SoundEffect v2.0** (OpenMOSS) | Apache-2.0 | 2026-10-07 | 48kHz ≤30초, en/zh 프롬프트. 실측 전 |
 | 판정기 | CLIP ViT-L/14(`openai`), LAION aesthetic `sac+logos+ava1-l14-linearMSE` | MIT / MIT | 2026-10-05 | 생성물 아님(점수만) |
 

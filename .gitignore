@@ -22,6 +22,8 @@ voice-gen/_last_output.wav
 voice-gen/qwen3-tts/
 sfx-gen/venv/
 sfx-gen/models/
+voice-gen/venv_qwen/
+sfx-gen/MOSS-TTS/
 
 # Serena(코드 탐색 도구)가 만드는 로컬 설정
 .serena/

@@ -109,6 +109,11 @@ venv_rocm\Scripts\python.exe -m acestep.model_downloader --model acestep-5Hz-lm-
   `py -3.12 -m venv venv_qwen` → 0번 ROCm 휠 셋 → `venv_qwen\Scripts\python.exe -m pip install -U qwen-tts soundfile` →
   `venv_qwen\Scripts\python.exe qwen3_trial.py`(문장 10 × 목소리 3 → `out\qwen3-<날짜>\sheet.md`). ROCm 에서 막히면 `--device cpu` 또는 0.6B.
   **한국어 자연스러움의 독립 청취 비교는 세상에 없다** — 같은 10줄을 Supertonic·Qwen3 로 뽑아 사용자가 듣고 고른다(K 티켓).
+- **10-08 실측(K-0082 단계 3)**: Qwen3 설치됨(`venv_qwen`, qwen-tts 0.1.1 — `-U` 를 빼야 ROCm torch 가 안 바뀐다). 모델 받기·로딩 8s(두 번째부터).
+  **MIOpen 을 끄면(`torch.backends.cudnn.enabled = False`) 한 줄 63~125초 → 10~18초**(실시간 약 2배) — 스크립트가 켬. 같은 10줄 비교 짝 `supertonic_trial.py`(목소리 M3·F1·M1).
+  받아쓰기 점검 `asr_check.py`(Whisper large-v3-turbo, MIT, 되풀이 방지 폴백) → `out\qwen3-20261008sr.md`: **Qwen3 글자 오류율 3.9~5.7%, Supertonic 72~149%**.
+  Supertonic 한국어는 같은 문장도 뽑을 때마다 다른 소리가 나고 대부분 알아들을 수 없다(10-02 K-0036 시트 10줄도 받아쓰기 ○ 2줄뿐). 패키지가 이미 NFKD 를 하므로 입력 문제가 아니다.
+  → **한국어 음성은 Qwen3-TTS VoiceDesign 이 주력 후보**(사용자 귀가 거부권). Supertonic 은 영어·일본어 쪽이 필요하면 다시 본다.
 
 ## 4. 효과음 — MOSS-SoundEffect v2 시험 (`sfx-gen/`)
 
@@ -116,6 +121,13 @@ Apache-2.0 · 1.3B DiT · 48kHz · ≤30초 · 프롬프트 en/zh. 상업 허용
 `py -3.12 -m venv venv` → 0번 ROCm 휠 셋 → `git clone https://github.com/OpenMOSS/MOSS-TTS.git` →
 `venv\Scripts\python.exe -m pip install -e MOSS-TTS\moss_soundeffect_v2`(cu128 extra 는 빼고) → `venv\Scripts\python.exe moss_trial.py`.
 Triton 이 없으니 `TORCHDYNAMO_DISABLE=1`(스크립트가 켬). 2순위는 Stable Audio 3 Small SFX(연매출 $1M 상한 조건).
+- **10-08 설치 실측(K-0082 단계 4)**: `pip install -c constraints-rocm.txt -e MOSS-TTS\moss_soundeffect_v2`(constraints 로 ROCm torch 고정 — 안 하면 PyPI torch 로 바뀐다).
+  함정 넷(전부 `moss_trial.py` 가 메움): ① audiotools 가 `torch.distributed.ReduceOp` 를 찾는다 → 빈 자리 심 ② HF 캐시 심볼릭 링크 권한 오류(WinError 1314) →
+  `snapshot_download(..., local_dir='models\moss-sfx-v2')`(11GB) 로 받고 `--model models\moss-sfx-v2` ③ `pipe.save_audio` 가 torchaudio 2.9 의 torchcodec 을 요구 → soundfile 로 저장
+  ④ 파이프라인이 늘 30초 창을 만들고 앞을 자른다 — 30초 창은 8GB 를 넘쳐 단계당 44초(소리 하나 37분), 안 쓰는 모델 CPU 로(`engine.vram_management_enabled`)+`TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1`(AMD 효율 어텐션)로 22초. **창 2~3초는 깨지고(내내 최대 음량), 5초는 소리가 창 뒤쪽에 놓여 앞이 빈다** →
+  **창 10초를 다 만들고 소리 시작점부터 길이만큼 자름**(+끝 30ms 페이드) — 한 개 약 184초(효율 어텐션 켬). MIOpen 은 끔(`cudnn.enabled=False`).
+  10-08 결과(12종, `out\moss-20261008\clap.md`): 자기 설명 1등 6/12, 짝 있는 10종 평균 유사도 0.105(지금 절차 효과음 0.078·1등 3/10). **타격·동전·괴물 으르렁·불 주문은 MOSS 가 낫고, UI 클릭·확인은 지금 절차 효과음이 낫다, 발소리는 둘 다 약함** — 귀 판정이 거부권.
+  자동 점검 `clap_check.py`(CLAP `laion/larger_clap_general`, Apache-2.0): 소리↔설명 유사도·12 프롬프트 중 등수, 지금 효과음(K-0045 절차 생성) 짝과 나란히 → `out\moss-<날짜>\clap.md`.
 
 ## 5. 판정기 (`judge-models/`, `populate-clip-cache.py`)
 

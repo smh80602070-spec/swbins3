@@ -15,6 +15,7 @@ import time
 
 import soundfile as sf
 import torch
+torch.backends.cudnn.enabled = False   # ROCm 윈도우: MIOpen 합성곱이 매우 느리다(10-08 실측 한 줄 63~125초 → 끄면 10~18초, ComfyUI 와 같은 원인)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 LINES = [  # 게임 대사 10줄 — 실존 인물·원작 이름 없음(SAGA 이름 정책)
